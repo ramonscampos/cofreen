@@ -1,26 +1,66 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Product Colors */
+  --green-dark: #015F43;
+  --green: #00875F;
+  --green-light: #00B37E;
+  --red-dark: #AA2834;
+  --red: #F75A68;
+
+  /* Base Colors */
+  --gray-1: #121214;
+  --gray-2: #202024;
+  --gray-3: #29292E;
+  --gray-4: #323238;
+  --gray-5: #7C7C8A;
+  --gray-6: #C4C4CC;
+  --gray-7: #E1E1E6;
+  --white: #FFFFFF;
+
+  --background: var(--gray-1);
+  --foreground: var(--gray-6);
 }
 
 @theme inline {
+  --color-green-dark: var(--green-dark);
+  --color-green: var(--green);
+  --color-green-light: var(--green-light);
+  --color-red-dark: var(--red-dark);
+  --color-red: var(--red);
+  
+  --color-gray-1: var(--gray-1);
+  --color-gray-2: var(--gray-2);
+  --color-gray-3: var(--gray-3);
+  --color-gray-4: var(--gray-4);
+  --color-gray-5: var(--gray-5);
+  --color-gray-6: var(--gray-6);
+  --color-gray-7: var(--gray-7);
+  
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  cursor: pointer !important;
+}
+
+/* Hide number input arrows */
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+input[type=number] {
+  -moz-appearance: textfield;
 }
