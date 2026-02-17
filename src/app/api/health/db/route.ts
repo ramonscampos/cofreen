@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     auth: { persistSession: false },
   });
 
-  const { error } = await supabase.from("drivers").select("id").limit(1);
+  const { error } = await supabase.rpc("ping");
 
   if (error) {
     return NextResponse.json(
