@@ -1,4 +1,4 @@
-import { DashboardItem, RecurringTemplate, Transaction } from "@/types"
+import { Card, CardTransaction, DashboardItem, RecurringTemplate, Transaction } from "@/types"
 
 export function getCurrentMonthRef(): string {
   const now = new Date()
@@ -39,14 +39,15 @@ export function formatMonthDisplay(monthRef: string): string {
 export function mergeTransactionsAndTemplates(
   transactions: Transaction[],
   templates: RecurringTemplate[],
-  monthRef: string
+  monthRef: string,
+  cards: Card[] = [],
+  cardTransactions: CardTransaction[] = []
 ): DashboardItem[] {
   const items: DashboardItem[] = []
   
   // 1. Add all real transactions
   transactions.forEach(t => {
     items.push({
-      type: 'real',
       id: t.id,
       kind: t.kind,
       description: t.description,
@@ -55,39 +56,92 @@ export function mergeTransactionsAndTemplates(
       isRecurring: t.is_recurring,
       transactionId: t.id,
       originalTemplateId: t.template_id || undefined,
-      // approximate day from created_at
       day: new Date(t.created_at).getDate(),
       installmentCurrent: t.installment_current || undefined,
-      installmentTotal: t.installment_total || undefined
+      installmentTotal: t.installment_total || undefined,
+      cardId: t.card_id || undefined,
     })
   })
 
-  // 2. Add templates that don't have a matching transaction for this month
+  // 2. Process Templates (Manual Installments or Recurring)
   templates.forEach(template => {
     if (!template.is_active) return
 
-    // New Rule: If template has a start month (month_ref), strictly respect it.
-    // If template.month_ref > current monthRef, it hasn't started yet.
+    // Common Rule: Respect start month
     if (template.month_ref && template.month_ref > monthRef) return
 
-    // Check if there is already a transaction for this template in this month
+    // Calculate dynamic installment info for Manual Installments
+    let effectiveCurrent = undefined;
+    let effectiveTotal = undefined;
+    let isInstallmentPlan = false;
+
+    if (template.installment_total && template.installment_total > 1) {
+       const [viewYear, viewMonth] = monthRef.split('-').map(Number);
+       const [startYear, startMonth] = (template.month_ref || monthRef).split('-').map(Number);
+       
+       const diffMonths = (viewYear - startYear) * 12 + (viewMonth - startMonth);
+       const current = (template.installment_current || 1) + diffMonths;
+
+       if (current > template.installment_total) return; // Finished
+
+       effectiveCurrent = current;
+       effectiveTotal = template.installment_total;
+       isInstallmentPlan = true;
+    }
+
+    // Check if there is already a transaction for this template in this month (Manual override)
     const hasTransaction = transactions.some(
       t => t.template_id === template.id && t.month_ref === monthRef
     )
 
     if (!hasTransaction) {
       items.push({
-        type: 'expected',
         id: template.id,
         kind: template.kind,
         description: template.description,
         amount: Number(template.default_amount),
         paid: false,
-        isRecurring: true,
+        isRecurring: !isInstallmentPlan, // If installment, distinct icon
         originalTemplateId: template.id,
-        day: template.day_of_month
+        day: template.day_of_month,
+        installmentCurrent: effectiveCurrent,
+        installmentTotal: effectiveTotal
       })
     }
+  })
+
+  // 3. Process Cards (Virtual vs Manual Bills)
+  cards.forEach(card => {
+     // Find the sub-transactions for this card/month
+     const subTransactions = cardTransactions.filter(ct => ct.card_id === card.id && ct.month_ref === monthRef)
+
+     // Check if there is already a MANUAL transaction (bill) for this card
+     const manualBillIndex = items.findIndex(item => item.cardId === card.id && item.transactionId); 
+     
+     if (manualBillIndex >= 0) {
+        items[manualBillIndex].cardTransactions = subTransactions;
+        items[manualBillIndex].cardColor = card.color;
+     } else {
+        const sum = subTransactions.reduce((acc, curr) => {
+          const val = (curr.installment_total && curr.installment_total > 1)
+             ? Number(curr.amount) / curr.installment_total
+             : Number(curr.amount);
+          return acc + val;
+        }, 0)
+        
+        items.push({
+            id: `virtual-card-${card.id}`,
+            kind: 'expense', 
+            description: card.bank_name, 
+            amount: sum,
+            paid: false, 
+            isRecurring: false, 
+            day: card.due_day,
+            cardId: card.id,
+            cardColor: card.color,
+            cardTransactions: subTransactions
+        })
+     }
   })
 
   // Sort by day (approximate)
@@ -100,49 +154,28 @@ export interface MonthTotals {
   total: number
 }
 
-// This function needs to be robust to handle the requirements:
-// - Expense Total = Sum of normal expenses + Manual Card Bills + VIRTUAL Card Bills (if no manual bill exists)
-export function calculateTotals(
-  items: DashboardItem[],
-  initialCards: { id: string }[],
-  initialCardTransactions: { card_id: string, month_ref: string, amount: number }[],
-  initialTransactions: { kind: string, card_id?: string | null, month_ref: string }[],
-  currentMonthRef: string
-): MonthTotals {
+// This function relies on 'items' being fully merged with Card logic.
+// Manual Bills are in 'items'. Virtual Bills are in 'items'.
+// Regular expenses are in 'items'.
+export function calculateTotals(items: DashboardItem[]): MonthTotals {
   let incoming = 0;
   let expense = 0;
 
   items.forEach((item) => {
-    if (item.type === "real") {
-      if (item.kind === "incoming") {
-        incoming += item.amount;
-      } else {
-        // It is an expense.
-        // If it has a card_id, it is a manual card bill. It affects totals.
-        // If it has NO card_id, it is a normal expense. It affects totals.
-        expense += item.amount;
-      }
-    }
-  });
-
-  // NOW, handle the "Calculated card bill" part.
-  initialCards.forEach((card) => {
-    const hasManualBill = initialTransactions.some(
-      (t) =>
-        t.kind === "expense" &&
-        t.card_id === card.id &&
-        t.month_ref === currentMonthRef,
-    );
-
-    if (!hasManualBill) {
-      // Calculate virtual bill
-      const virtualSum = initialCardTransactions
-        .filter(
-          (ct) => ct.card_id === card.id && ct.month_ref === currentMonthRef,
-        )
-        .reduce((sum, ct) => sum + Number(ct.amount), 0);
-
-      expense += virtualSum;
+    if (item.kind === "incoming") {
+      incoming += item.amount;
+    } else if (item.kind === "expense") {
+      // Logic:
+      // If it's a Manual Bill (Transaction with cardId) -> Added.
+      // If it's a Virtual Bill (starts with virtual-) -> Added.
+      // If it's a regular expense -> Added.
+      // Templates are also added if merged.
+      
+      const val = (item.installmentTotal && item.installmentTotal > 1)
+        ? item.amount / item.installmentTotal
+        : item.amount;
+      
+      expense += val;
     }
   });
 

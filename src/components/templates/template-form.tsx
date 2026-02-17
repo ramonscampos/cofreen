@@ -78,7 +78,7 @@ export function TemplateForm({
         <span className="text-sm font-medium text-zinc-400">Tipo</span>
         <Select value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
           <option value="incoming">Entrada</option>
-          <option value="expense">Saída</option>
+          <option value="expense">Despesa</option>
         </Select>
       </div>
 

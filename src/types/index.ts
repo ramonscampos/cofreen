@@ -19,6 +19,10 @@ export interface RecurringTemplate {
   day_of_month: number
   month_ref?: string
   is_active: boolean
+  installment_current?: number
+  installment_total?: number
+  plan_id?: string
+  card_id?: string
   created_at: string
 }
 
@@ -53,7 +57,6 @@ export interface CardTransaction {
 
 // Helper type for the unified list view
 export interface DashboardItem {
-  type: 'real' | 'expected'
   id: string // Transaction ID or Template ID
   kind: Kind
   description: string
@@ -65,4 +68,12 @@ export interface DashboardItem {
   transactionId?: string // If real, the transaction ID
   installmentCurrent?: number
   installmentTotal?: number
+  cardTransactions?: CardTransaction[] // For card invoice items
+  cardId?: string
+  cardColor?: string
+}
+
+export interface User {
+  id: string
+  email?: string
 }

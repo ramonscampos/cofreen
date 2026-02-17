@@ -13,6 +13,7 @@ import {
   getCurrentMonthRef,
   mergeTransactionsAndTemplates,
 } from "@/lib/finance-logic";
+import { TRANSACTION_UPDATED_EVENT } from "@/lib/events";
 import { createClient } from "@/lib/supabase/client";
 import type {
   Card,
@@ -39,7 +40,7 @@ export function Header() {
   );
 
   useEffect(() => {
-    const getUser = async () => {
+    const fetchData = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -63,7 +64,7 @@ export function Header() {
             .from("card_transactions")
             .select("*")
             .eq("user_id", user.id)
-            .eq("month_ref", monthRef),
+            .or(`month_ref.eq.${monthRef},installment_total.gt.1`),
         ]);
 
         if (txRes.data) setTransactions(txRes.data);
@@ -72,22 +73,35 @@ export function Header() {
         if (cardTxRes.data) setCardTransactions(cardTxRes.data);
       }
     };
-    getUser();
+
+    fetchData();
+
+    // Listen for updates
+    const handleUpdate = () => fetchData();
+    if (typeof window !== "undefined") {
+      window.addEventListener(TRANSACTION_UPDATED_EVENT, handleUpdate);
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener(TRANSACTION_UPDATED_EVENT, handleUpdate);
+      }
+    };
   }, [supabase, monthRef]); // Re-fetch when month changes
 
   const items = useMemo(() => {
-    return mergeTransactionsAndTemplates(transactions, templates, monthRef);
-  }, [transactions, templates, monthRef]);
-
-  const totals = useMemo(() => {
-    return calculateTotals(
-      items,
+    return mergeTransactionsAndTemplates(
+      transactions,
+      templates,
+      monthRef,
       cards,
       cardTransactions,
-      transactions,
-      monthRef,
     );
-  }, [items, cards, cardTransactions, transactions, monthRef]);
+  }, [transactions, templates, monthRef, cards, cardTransactions]);
+
+  const totals = useMemo(() => {
+    return calculateTotals(items);
+  }, [items]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();

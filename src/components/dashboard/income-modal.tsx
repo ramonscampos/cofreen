@@ -1,6 +1,6 @@
 "use client";
 
-import { format, parse } from "date-fns";
+import { format, parse, isValid } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -10,22 +10,25 @@ import { Modal } from "@/components/ui/modal";
 import { MoneyInput } from "@/components/ui/money-input";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { Switch } from "@/components/ui/switch";
+import { triggerTransactionUpdate } from "@/lib/events";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
-interface NewIncomeModalProps {
+interface IncomeModalProps {
   isOpen: boolean;
   onClose: () => void;
   userId: string;
   defaultMonthRef?: string;
+  initialData?: any; // Using any for DashboardItem flexibility, ideally strict type
 }
 
-export function NewIncomeModal({
+export function IncomeModal({
   isOpen,
   onClose,
   userId,
   defaultMonthRef,
-}: NewIncomeModalProps) {
+  initialData,
+}: IncomeModalProps) {
   const supabase = createClient();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -36,21 +39,39 @@ export function NewIncomeModal({
   const [day, setDay] = useState<string>("");
 
   // State for Date object for picker
-  const [selectedDate, setSelectedDate] = useState<Date>(() => {
-    if (defaultMonthRef) {
-      return parse(defaultMonthRef, "yyyy-MM", new Date());
-    }
-    return new Date();
-  });
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
-  // Keep monthRef string in sync or derive on submit
-  // Actually simpler to just use selectedDate
-
+  // Effect to populate form on open/initialData change
   useEffect(() => {
-    if (defaultMonthRef) {
-      setSelectedDate(parse(defaultMonthRef, "yyyy-MM", new Date()));
+    if (isOpen) {
+       if (initialData) {
+          setDescription(initialData.description);
+          setAmount(initialData.amount?.toString() || "");
+          setIsRecurring(initialData.isRecurring || initialData.is_recurring || false);
+          
+          if (initialData.day_of_month) {
+             setDay(initialData.day_of_month.toString());
+          }
+          
+          const ref = initialData.month_ref || defaultMonthRef;
+          if (ref) {
+             setSelectedDate(parse(ref, "yyyy-MM", new Date()));
+          }
+       } else {
+          // Reset for new creation
+          setDescription("");
+          setAmount("");
+          setIsRecurring(false);
+          setDay(String(new Date().getDate()));
+          if (defaultMonthRef) {
+            setSelectedDate(parse(defaultMonthRef, "yyyy-MM", new Date()));
+          } else {
+            setSelectedDate(new Date());
+          }
+       }
     }
-  }, [defaultMonthRef]);
+  }, [isOpen, initialData, defaultMonthRef]);
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,60 +84,68 @@ export function NewIncomeModal({
       return;
     }
 
+    if (!isValid(selectedDate)) {
+      toast.error("Data de referência inválida");
+      setLoading(false);
+      return;
+    }
+
     let error = null;
     const monthRefStr = format(selectedDate, "yyyy-MM");
 
-    if (isRecurring) {
-      const { error: err } = await supabase.from("recurring_templates").insert({
+    const payload = {
         description,
-        default_amount: numericAmount,
+        [isRecurring ? 'default_amount' : 'amount']: numericAmount,
         kind: "incoming",
-        day_of_month: parseInt(day),
+        ...(isRecurring ? { day_of_month: parseInt(day) } : { month_ref: monthRefStr, paid: true, is_recurring: false }),
         user_id: userId,
-        month_ref: monthRefStr,
-        // category: category // Ignored for now as per DB schema
-        is_active: true,
-      });
-      error = err;
+        ...(isRecurring ? { month_ref: monthRefStr, is_active: true } : {}), // recurring also has month_ref usually as start
+    };
+
+    if (initialData?.id) {
+       // UPDATE
+       // Check if we are updating a recurring template or a transaction
+       const table = initialData.isRecurring ? "recurring_templates" : "transactions";
+       // Note: Switch from recurring to transaction or vice versa is tricky here without delete/create. 
+       // For now assuming we stick to the original type or simple updates.
+       
+       const { error: err } = await supabase
+         .from(table)
+         .update(payload)
+         .eq("id", initialData.id);
+       error = err;
+       
     } else {
-      const { error: err } = await supabase.from("transactions").insert({
-        description,
-        amount: numericAmount,
-        kind: "incoming",
-        month_ref: monthRefStr,
-        paid: true,
-        user_id: userId,
-        is_recurring: false,
-        // category: category // Ignored
-      });
-      error = err;
+        // CREATE
+        if (isRecurring) {
+          const { error: err } = await supabase.from("recurring_templates").insert(payload);
+          error = err;
+        } else {
+          const { error: err } = await supabase.from("transactions").insert(payload);
+          error = err;
+        }
     }
 
     setLoading(false);
 
     if (!error) {
-      toast.success("Entrada cadastrada com sucesso!");
+      toast.success(initialData ? "Entrada atualizada!" : "Entrada cadastrada!");
+      triggerTransactionUpdate();
       router.refresh();
-      handleClose();
+      onClose();
     } else {
-      toast.error("Erro ao cadastrar entrada");
+      toast.error("Erro ao salvar entrada");
       console.error(error);
     }
   };
-
-  const handleClose = () => {
-    setDescription("");
-    setAmount("");
-    setIsRecurring(false);
-    setDay(String(new Date().getDate()));
-    onClose();
-  };
+  
+  // No handleClose needed specifically if we use useEffect to reset/populate
 
   return (
     <Modal
       isOpen={isOpen}
-      onClose={handleClose}
-      title="Nova entrada"
+      onClose={onClose}
+      title={initialData ? "Editar Entrada" : "Nova Entrada"}
       className="bg-gray-2 border-none"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -142,15 +171,19 @@ export function NewIncomeModal({
 
         <div className="flex items-center justify-between py-2 gap-4">
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-white text-sm">Recorrente?</span>
-            <Switch checked={isRecurring} onCheckedChange={setIsRecurring} />
+            <span className={cn("text-white text-sm", !!initialData && "opacity-50")}>Recorrente?</span>
+            <Switch 
+              checked={isRecurring} 
+              onCheckedChange={setIsRecurring} 
+              disabled={!!initialData}
+            />
           </div>
 
           <div className="flex items-center gap-2 flex-1 justify-end">
             <span className="text-sm text-gray-5 whitespace-nowrap">
               Mês de referência
             </span>
-            <div className="w-[180px]">
+            <div className="w-45">
               <MonthYearPicker date={selectedDate} onChange={setSelectedDate} />
             </div>
           </div>
@@ -178,7 +211,7 @@ export function NewIncomeModal({
           disabled={loading}
           className="w-full h-12 bg-green hover:bg-green-light text-white font-bold mt-4"
         >
-          {loading ? "Cadastrando..." : "Cadastrar"}
+          {loading ? "Salvando..." : "Salvar"}
         </Button>
       </form>
     </Modal>

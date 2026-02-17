@@ -34,7 +34,7 @@ export function SummaryCards({ incoming, expense, total }: SummaryCardsProps) {
       <Card className="bg-[#323238] border-none text-white">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-base font-normal text-zinc-300">
-            Saídas
+            Despesas
           </CardTitle>
           <ArrowDownCircle className="h-8 w-8 text-[#f75a68]" />
         </CardHeader>

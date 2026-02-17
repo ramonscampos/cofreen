@@ -7,10 +7,10 @@ import { TemplateForm } from "@/components/templates/template-form";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { createClient } from "@/lib/supabase/client";
-import type { RecurringTemplate } from "@/types";
+import type { RecurringTemplate, User } from "@/types";
 
 interface TemplateManagerProps {
-  user: any;
+  user: User;
   initialTemplates: RecurringTemplate[];
 }
 
@@ -75,7 +75,7 @@ export function TemplateManager({
                 <span
                   className={`text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded ${template.kind === "incoming" ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500"}`}
                 >
-                  {template.kind === "incoming" ? "Entrada" : "Saída"}
+                  {template.kind === "incoming" ? "Entrada" : "Despesa"}
                 </span>
                 <span className="text-xs text-zinc-500">
                   Dia {template.day_of_month}

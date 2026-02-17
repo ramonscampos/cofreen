@@ -1,36 +1,22 @@
 "use client";
 
-import {
-  ChevronDown,
-  ChevronLeft,
-  ChevronUp,
-  CreditCard,
-  Pencil,
-  Plus,
-  Trash2,
-} from "lucide-react";
+import { ChevronLeft, CreditCard, Pencil, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CardForm } from "@/components/cards/card-form";
-import { CardTransactionForm } from "@/components/cards/card-transaction-form";
-import { MonthSwitcher } from "@/components/dashboard/month-switcher";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { createClient } from "@/lib/supabase/client";
-import type { Card, CardTransaction } from "@/types";
+import type { Card, User } from "@/types";
 
 interface CardManagerProps {
-  user: any;
+  user: User;
   initialCards: Card[];
-  monthRef: string;
-  initialCardTransactions: CardTransaction[];
 }
 
 export function CardManager({
   user,
   initialCards,
-  monthRef,
-  initialCardTransactions,
 }: CardManagerProps) {
   const router = useRouter();
   const supabase = createClient();
@@ -38,33 +24,11 @@ export function CardManager({
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
 
-  const [purchaseModalOpen, setPurchaseModalOpen] = useState(false);
-  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
-
-  const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
-
-  const handleEdit = (card: Card, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditingCard(card);
-    setModalOpen(true);
-  };
-
-  const handleDelete = async (card: Card, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleDelete = async (card: Card) => {
     if (confirm(`Tem certeza que deseja excluir o cartão ${card.bank_name}?`)) {
       const { error } = await supabase.from("cards").delete().eq("id", card.id);
       if (!error) router.refresh();
     }
-  };
-
-  const handleOpenPurchase = (cardId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedCardId(cardId);
-    setPurchaseModalOpen(true);
-  };
-
-  const toggleExpand = (cardId: string) => {
-    setExpandedCardId(expandedCardId === cardId ? null : cardId);
   };
 
   return (
@@ -92,29 +56,15 @@ export function CardManager({
 
       <div className="grid gap-4">
         {initialCards.map((card) => (
-          <div
+          <CardItem
             key={card.id}
-            className="rounded-lg border border-gray-4 bg-gray-3 overflow-hidden"
-          >
-            <div
-              className="p-4 flex items-center justify-between cursor-pointer hover:bg-zinc-800/50 transition-colors"
-              style={{ borderLeft: `10px solid ${card.color}` }}
-              onClick={() => toggleExpand(card.id)}
-            >
-              <div className="flex flex-1 items-center gap-4 pr-8">
-                <CreditCard className="h-6 w-6 text-zinc-400" />
-                <div>
-                  <div className="font-semibold text-lg">{card.bank_name}</div>
-                  {card.description && (
-                    <div className="text-sm text-zinc-500">
-                      {card.description}
-                    </div>
-                  )}
-                </div>
-                <span className="ml-auto">{card.due_day}</span>
-              </div>
-            </div>
-          </div>
+            card={card}
+            onEdit={(card) => {
+              setEditingCard(card);
+              setModalOpen(true);
+            }}
+            onDelete={(card) => handleDelete(card)}
+          />
         ))}
       </div>
 
@@ -130,22 +80,69 @@ export function CardManager({
           initialData={editingCard}
         />
       </Modal>
+    </div>
+  );
+}
 
-      <Modal
-        isOpen={purchaseModalOpen}
-        onClose={() => setPurchaseModalOpen(false)}
-        title="Nova Compra no Cartão"
-        className="bg-[#202024] border-none"
+interface CardItemProps {
+  card: Card;
+  onEdit: (card: Card) => void;
+  onDelete: (card: Card) => void;
+}
+
+function CardItem({ card, onEdit, onDelete }: CardItemProps) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div className="rounded-lg border border-gray-4 bg-gray-3 overflow-hidden relative h-22">
+      <div className="absolute top-0 right-0 h-full flex w-32 z-0">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(card);
+          }}
+          className="flex-1 bg-red-600 hover:bg-red-700 flex items-center justify-center transition-colors rounded-r-lg z-2 -mr-4"
+        >
+          <Trash2 className="h-5 w-5 text-white ml-3" />
+        </button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(card);
+            setIsOpen(false);
+          }}
+          className="flex-1 bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center transition-colors rounded-r-lg"
+        >
+          <Pencil className="h-5 w-5 text-white ml-3" />
+        </button>
+      </div>
+
+      <div
+        className={`relative bg-gray-3 rounded-lg z-10 transition-all duration-300 ease-in-out overflow-hidden h-full flex items-center ${
+          isOpen ? "w-[calc(100%-7rem)]" : "w-full"
+        }`}
       >
-        {selectedCardId && (
-          <CardTransactionForm
-            onClose={() => setPurchaseModalOpen(false)}
-            cardId={selectedCardId}
-            userId={user.id}
-            currentMonthRef={monthRef}
-          />
-        )}
-      </Modal>
+        <div
+          className="w-full h-full p-4 flex items-center justify-between cursor-pointer hover:bg-zinc-800/50 transition-colors"
+          style={{ borderLeft: `10px solid ${card.color}` }}
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          <div className="flex flex-1 items-center gap-4 pr-8">
+            <CreditCard className="h-6 w-6 text-zinc-400" />
+            <div>
+              <div className="font-semibold text-lg">{card.bank_name}</div>
+              {card.description && (
+                <div className="text-sm text-zinc-500">{card.description}</div>
+              )}
+            </div>
+            <div className="ml-auto text-sm text-zinc-400">
+              Vence dia {card.due_day}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -66,10 +66,15 @@ export function MonthYearPicker({
 
     // Validate and update Valid Date
     if (value.length === 7) {
-      const parsedDate = parse(value, "MM/yyyy", new Date());
-      if (isValid(parsedDate)) {
-        onChange(parsedDate);
-        setViewDate(parsedDate);
+      const [monthStr, yearStr] = value.split("/");
+      const month = parseInt(monthStr);
+      
+      if (month >= 1 && month <= 12) {
+        const parsedDate = parse(value, "MM/yyyy", new Date());
+        if (isValid(parsedDate)) {
+          onChange(parsedDate);
+          setViewDate(parsedDate);
+        }
       }
     }
   };
