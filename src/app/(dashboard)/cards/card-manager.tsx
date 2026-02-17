@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CardForm } from "@/components/cards/card-form";
 import { Button } from "@/components/ui/button";
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { Modal } from "@/components/ui/modal";
 import { createClient } from "@/lib/supabase/client";
 import type { Card, User } from "@/types";
@@ -24,11 +25,23 @@ export function CardManager({
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
 
-  const handleDelete = async (card: Card) => {
-    if (confirm(`Tem certeza que deseja excluir o cartão ${card.bank_name}?`)) {
-      const { error } = await supabase.from("cards").delete().eq("id", card.id);
-      if (!error) router.refresh();
-    }
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [cardToDelete, setCardToDelete] = useState<Card | null>(null);
+
+  const handleDelete = (card: Card) => {
+    setCardToDelete(card);
+    setConfirmationOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!cardToDelete) return;
+
+    const { error } = await supabase
+      .from("cards")
+      .delete()
+      .eq("id", cardToDelete.id);
+
+    if (!error) router.refresh();
   };
 
   return (
@@ -80,6 +93,17 @@ export function CardManager({
           initialData={editingCard}
         />
       </Modal>
+
+
+      <ConfirmationModal
+        isOpen={confirmationOpen}
+        onClose={() => setConfirmationOpen(false)}
+        onConfirm={confirmDelete}
+        title="Excluir cartão"
+        description={`Tem certeza que deseja excluir o cartão "${cardToDelete?.bank_name}"? Essa ação não pode ser desfeita.`}
+        confirmText="Excluir"
+        variant="danger"
+      />
     </div>
   );
 }

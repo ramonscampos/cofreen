@@ -40,6 +40,7 @@ export interface Transaction {
   installment_current?: number | null
   installment_total?: number | null
   created_at: string
+  transaction_date?: string
 }
 
 export interface CardTransaction {
@@ -53,6 +54,7 @@ export interface CardTransaction {
   installment_current?: number | null
   plan_id?: string | null
   created_at: string
+  is_recurring?: boolean
 }
 
 // Helper type for the unified list view
@@ -71,6 +73,7 @@ export interface DashboardItem {
   cardTransactions?: CardTransaction[] // For card invoice items
   cardId?: string
   cardColor?: string
+  isCardTransaction?: boolean
 }
 
 export interface User {

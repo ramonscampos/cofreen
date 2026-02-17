@@ -12,6 +12,8 @@ import type { DashboardItem } from "@/types";
 
 interface TransactionItemProps {
   item: DashboardItem;
+  isOpen: boolean;
+  onToggle: () => void;
   onMarkAsPaid: (item: DashboardItem) => void;
   onDelete: (item: DashboardItem) => void;
   onEdit: (item: DashboardItem) => void;
@@ -19,18 +21,20 @@ interface TransactionItemProps {
 
 export function TransactionItem({
   item,
+  isOpen,
+  onToggle,
   onMarkAsPaid,
   onDelete,
   onEdit,
 }: TransactionItemProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  // const [isOpen, setIsOpen] = useState(false); // Removed local state
   const [isExpanded, setIsExpanded] = useState(false);
   const isExpense = item.kind === "expense";
   const hasSubItems = item.cardTransactions && item.cardTransactions.length > 0;
 
-  const displayAmount = 
-    (item.installmentTotal && item.installmentTotal > 1) 
-      ? item.amount / item.installmentTotal 
+  const displayAmount =
+    item.installmentTotal && item.installmentTotal > 1
+      ? item.amount / item.installmentTotal
       : item.amount;
 
   const amount = new Intl.NumberFormat("pt-BR", {
@@ -40,7 +44,12 @@ export function TransactionItem({
 
   return (
     <div className="relative w-full mb-2">
-      <div className="absolute inset-y-0 right-0 flex w-48 h-16">
+      <div
+        className={cn(
+          "absolute inset-y-0 right-0 flex w-48 h-16 transition-opacity duration-300",
+          !isOpen && "opacity-0 pointer-events-none",
+        )}
+      >
         {!item.cardId && (
           <button
             type="button"
@@ -58,38 +67,46 @@ export function TransactionItem({
           onClick={(e) => {
             e.stopPropagation();
             onEdit(item);
-            setIsOpen(false);
+            onToggle(); // Close on action
           }}
-          className="flex-1 bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center transition-colors rounded-r-lg z-2 -mr-4 h-16.5"
+          className={cn(
+            "flex-1 bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center transition-colors rounded-r-lg z-2  h-16.5",
+            isExpense && "-mr-4",
+          )}
         >
           <Pencil className="h-5 w-5 text-white  ml-3" />
         </button>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onMarkAsPaid(item);
-            setIsOpen(false);
-          }}
-          className={cn(
-            "flex-1 flex items-center justify-center transition-colors rounded-r-lg h-16.5",
-            item.paid
-              ? "bg-yellow-600 hover:bg-yellow-700"
-              : "bg-[#00875f] hover:bg-[#00875f]/90",
-          )}
-        >
-          {item.paid ? (
-            <Undo2 className="h-5 w-5 text-white  ml-3" />
-          ) : (
-            <CheckCircle2 className="h-5 w-5 text-white  ml-3" />
-          )}
-        </button>
+        {isExpense && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onMarkAsPaid(item);
+              onToggle(); // Close on action
+            }}
+            className={cn(
+              "flex-1 flex items-center justify-center transition-colors rounded-r-lg h-16.5 z-1",
+              item.paid
+                ? "bg-yellow-600 hover:bg-yellow-700"
+                : "bg-[#00875f] hover:bg-[#00875f]/90",
+            )}
+          >
+            {item.paid ? (
+              <Undo2 className="h-5 w-5 text-white  ml-3" />
+            ) : (
+              <CheckCircle2 className="h-5 w-5 text-white  ml-3" />
+            )}
+          </button>
+        )}
       </div>
 
       <div
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => onToggle()}
         className={cn(
-          "relative bg-[#29292e] rounded-md transition-all duration-300 ease-in-out cursor-pointer z-10 overflow-hidden border border-transparent",
+          "relative rounded-md transition-all duration-300 ease-in-out cursor-pointer z-10 overflow-hidden border border-transparent",
+          item.paid
+            ? "bg-[#18181b] shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] "
+            : "bg-[#29292e] hover:bg-[#323238]",
           isOpen ? "w-[calc(100%-11rem)]" : "w-full",
         )}
         style={{
@@ -98,7 +115,12 @@ export function TransactionItem({
             : undefined,
         }}
       >
-        <div className="min-h-16 items-center px-4 gap-4 grid grid-cols-[4fr_2fr_2fr_1fr] w-full">
+        <div
+          className={cn(
+            "min-h-16 items-center px-4 gap-4 grid grid-cols-[4fr_2fr_2fr_1fr] w-full transition-all",
+            item.paid && "opacity-50 grayscale",
+          )}
+        >
           <div className="text-zinc-300 font-normal text-base flex items-center gap-3 overflow-hidden">
             {hasSubItems && (
               <button
@@ -162,7 +184,7 @@ export function TransactionItem({
                       />
                       <path
                         className="text-[#00b37e]"
-                        strokeDasharray={`${(item.installmentCurrent! / item.installmentTotal!) * 100}, 100`}
+                        strokeDasharray={`${((item.installmentCurrent || 0) / item.installmentTotal) * 100}, 100`}
                         d="M18 2.0845
                             a 15.9155 15.9155 0 0 1 0 31.831
                             a 15.9155 15.9155 0 0 1 0 -31.831"
@@ -183,9 +205,14 @@ export function TransactionItem({
             {item.cardTransactions?.map((sub) => (
               <div
                 key={sub.id}
-                className="grid grid-cols-[4fr_2fr_2fr_1fr] gap-4 text-sm text-zinc-400"
+                className="grid grid-cols-[4fr_2fr_2fr_1fr] gap-4 text-sm text-zinc-400 group hover:bg-zinc-800/50 rounded-md p-1 items-center transition-colors"
               >
-                <span className="truncate pl-8">{sub.description}</span>
+                <div className="flex items-center gap-2 pl-8 overflow-hidden">
+                  {sub.is_recurring && (
+                    <Repeat className="h-3 w-3 shrink-0 text-zinc-500" />
+                  )}
+                  <span className="truncate">{sub.description}</span>
+                </div>
                 <span>
                   {new Intl.NumberFormat("pt-BR", {
                     style: "currency",
@@ -193,7 +220,7 @@ export function TransactionItem({
                   }).format(
                     sub.installment_total && sub.installment_total > 1
                       ? sub.amount / sub.installment_total
-                      : sub.amount
+                      : sub.amount,
                   )}
                 </span>
                 <span>
@@ -201,7 +228,50 @@ export function TransactionItem({
                     ? `${sub.installment_current}/${sub.installment_total}`
                     : "-"}
                 </span>
-                <span></span>
+                
+                <div className="flex items-center justify-end gap-2 pr-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onEdit({
+                                ...item, // Inherit base properties
+                                id: sub.id,
+                                description: sub.description,
+                                amount: sub.amount,
+                                kind: 'expense',
+                                isRecurring: sub.is_recurring || false,
+                                isCardTransaction: !sub.is_recurring, // If not recurring, it's a card transaction
+                                originalTemplateId: sub.is_recurring ? sub.id : undefined,
+                                installmentCurrent: sub.installment_current || undefined,
+                                installmentTotal: sub.installment_total || undefined,
+                                cardId: sub.card_id,
+                            } as DashboardItem);
+                        }}
+                        className="p-1 hover:bg-zinc-800 rounded transition-colors"
+                        title="Editar"
+                    >
+                        <Pencil className="h-3.5 w-3.5 text-zinc-500 hover:text-white" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete({
+                                ...item,
+                                id: sub.id,
+                                description: sub.description,
+                                isRecurring: sub.is_recurring || false,
+                                isCardTransaction: !sub.is_recurring,
+                                originalTemplateId: sub.is_recurring ? sub.id : undefined,
+                            } as DashboardItem);
+                        }}
+                        className="p-1 hover:bg-zinc-800 rounded transition-colors"
+                        title="Excluir"
+                    >
+                        <Trash2 className="h-3.5 w-3.5 text-zinc-500 hover:text-red-500" />
+                    </button>
+                </div>
               </div>
             ))}
             {item.cardTransactions?.length === 0 && (

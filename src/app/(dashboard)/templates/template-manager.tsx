@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { TemplateForm } from "@/components/templates/template-form";
 import { Button } from "@/components/ui/button";
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { Modal } from "@/components/ui/modal";
 import { createClient } from "@/lib/supabase/client";
 import type { RecurringTemplate, User } from "@/types";
@@ -24,23 +25,28 @@ export function TemplateManager({
   const [editingTemplate, setEditingTemplate] =
     useState<RecurringTemplate | null>(null);
 
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState<RecurringTemplate | null>(null);
+
   const handleEdit = (template: RecurringTemplate) => {
     setEditingTemplate(template);
     setModalOpen(true);
   };
 
-  const handleDelete = async (template: RecurringTemplate) => {
-    if (
-      confirm(
-        `Tem certeza que deseja excluir o modelo "${template.description}"? Isso não afetará transações passadas.`,
-      )
-    ) {
-      const { error } = await supabase
-        .from("recurring_templates")
-        .delete()
-        .eq("id", template.id);
-      if (!error) router.refresh();
-    }
+  const handleDelete = (template: RecurringTemplate) => {
+    setTemplateToDelete(template);
+    setConfirmationOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!templateToDelete) return;
+
+    const { error } = await supabase
+      .from("recurring_templates")
+      .delete()
+      .eq("id", templateToDelete.id);
+
+    if (!error) router.refresh();
   };
 
   return (
@@ -126,6 +132,16 @@ export function TemplateManager({
           initialData={editingTemplate}
         />
       </Modal>
+
+      <ConfirmationModal
+        isOpen={confirmationOpen}
+        onClose={() => setConfirmationOpen(false)}
+        onConfirm={confirmDelete}
+        title="Excluir modelo"
+        description={`Tem certeza que deseja excluir o modelo "${templateToDelete?.description}"? Isso não afetará transações passadas.`}
+        confirmText="Excluir"
+        variant="danger"
+      />
     </div>
   );
 }

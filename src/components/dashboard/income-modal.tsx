@@ -100,6 +100,8 @@ export function IncomeModal({
         ...(isRecurring ? { day_of_month: parseInt(day) } : { month_ref: monthRefStr, paid: true, is_recurring: false }),
         user_id: userId,
         ...(isRecurring ? { month_ref: monthRefStr, is_active: true } : {}), // recurring also has month_ref usually as start
+        // Add transaction date only for non-recurring income
+        ...(!isRecurring && { transaction_date: new Date().toISOString().split("T")[0] }),
     };
 
     if (initialData?.id) {

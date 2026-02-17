@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { triggerTransactionUpdate } from "@/lib/events";
 import { mergeTransactionsAndTemplates } from "@/lib/finance-logic";
 import { createClient } from "@/lib/supabase/client";
+import { cn } from "@/lib/utils";
 import type {
   Card,
   CardTransaction,
@@ -27,10 +28,11 @@ interface DashboardViewProps {
   initialCardTransactions: CardTransaction[];
 }
 
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Layers, List } from "lucide-react";
 import { EditBillModal } from "@/components/dashboard/edit-bill-modal";
 import { ExpenseModal } from "@/components/dashboard/expense-modal";
 import { IncomeModal } from "@/components/dashboard/income-modal";
+import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 
 // ... existing imports
 
@@ -52,6 +54,11 @@ export function DashboardView({
   const [editingBillItem, setEditingBillItem] = useState<DashboardItem | null>(
     null,
   );
+
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<DashboardItem | null>(null);
+
+  const [viewMode, setViewMode] = useState<"mixed" | "grouped">("mixed");
 
   const items = useMemo(() => {
     return mergeTransactionsAndTemplates(
@@ -89,9 +96,9 @@ export function DashboardView({
   const handleEdit = (item: DashboardItem) => {
     // Check if it's a Card Bill (Virtual or Manual)
     if (item.cardId) {
-       setEditingBillItem(item);
-       setBillModalOpen(true);
-       return;
+      setEditingBillItem(item);
+      setBillModalOpen(true);
+      return;
     }
 
     setEditingItem(item);
@@ -99,13 +106,28 @@ export function DashboardView({
     setModalOpen(true);
   };
 
-  const handleDelete = async (item: DashboardItem) => {
-    if (!confirm(`Tem certeza que deseja excluir?`)) return;
+  const handleDelete = (item: DashboardItem) => {
+    setItemToDelete(item);
+    setConfirmationOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
+    const item = itemToDelete;
 
     let error = null;
-    if (item.isRecurring || (item.originalTemplateId && item.originalTemplateId === item.id)) {
+    if (
+      item.isRecurring ||
+      (item.originalTemplateId && item.originalTemplateId === item.id)
+    ) {
       const { error: err } = await supabase
         .from("recurring_templates")
+        .delete()
+        .eq("id", item.id);
+      error = err;
+    } else if (item.isCardTransaction) {
+      const { error: err } = await supabase
+        .from("card_transactions")
         .delete()
         .eq("id", item.id);
       error = err;
@@ -138,6 +160,7 @@ export function DashboardView({
         card_id: item.cardId,
         user_id: user.id,
         is_recurring: false,
+        transaction_date: `${initialMonthRef}-${String(item.day || 1).padStart(2, "0")}`,
       });
 
       if (!error) {
@@ -150,8 +173,35 @@ export function DashboardView({
       return;
     }
 
-    if (item.isRecurring && !item.paid) {
-      // Logic for templated items?
+    if (
+      item.originalTemplateId &&
+      !item.transactionId &&
+      !item.paid
+    ) {
+      // It's a template projection being paid. Create it as a real Transaction.
+      const { error } = await supabase.from("transactions").insert({
+        description: item.description,
+        amount: item.amount,
+        kind: item.kind,
+        month_ref: initialMonthRef,
+        paid: true,
+        template_id: item.originalTemplateId,
+        user_id: user.id,
+        is_recurring: item.isRecurring,
+        installment_current: item.installmentCurrent,
+        installment_total: item.installmentTotal,
+        transaction_date: `${initialMonthRef}-${String(item.day || 1).padStart(2, "0")}`,
+      });
+
+      if (!error) {
+        toast.success("Transação recorrente paga!");
+        triggerTransactionUpdate();
+        router.refresh();
+      } else {
+        console.error(error);
+        toast.error("Erro ao processar transação recorrente");
+      }
+      return;
     }
 
     const { error } = await supabase
@@ -198,17 +248,48 @@ export function DashboardView({
         </button>
       </div>
 
+
+
+      <div className="flex justify-end mb-2">
+        <div className="flex bg-[#202024] rounded-md p-1 gap-1">
+          <button
+            onClick={() => setViewMode("mixed")}
+            className={cn(
+              "p-1.5 rounded-md transition-all hover:text-white",
+              viewMode === "mixed"
+                ? "bg-[#00875f] text-white shadow-sm"
+                : "text-zinc-400 hover:bg-zinc-800",
+            )}
+            title="Visualização mista"
+          >
+            <List size={18} />
+          </button>
+          <button
+            onClick={() => setViewMode("grouped")}
+            className={cn(
+              "p-1.5 rounded-md transition-all hover:text-white",
+              viewMode === "grouped"
+                ? "bg-[#00875f] text-white shadow-sm"
+                : "text-zinc-400 hover:bg-zinc-800",
+            )}
+            title="Visualização agrupada"
+          >
+            <Layers size={18} />
+          </button>
+        </div>
+      </div>
+
       <div className="grid gap-2">
         <h2 className="sr-only">Transações</h2>
         <TransactionList
           items={items}
+          viewMode={viewMode}
           onDelete={handleDelete}
           onEdit={handleEdit}
           onMarkAsPaid={handleMarkAsPaid}
         />
       </div>
 
-      {/* Income Modal - Handles Edit & Create */}
       <IncomeModal
         isOpen={modalOpen && modalKind === "incoming"}
         onClose={() => setModalOpen(false)}
@@ -217,7 +298,6 @@ export function DashboardView({
         initialData={editingItem}
       />
 
-      {/* Expense Modal - Handles Edit & Create */}
       <ExpenseModal
         isOpen={modalOpen && modalKind === "expense"}
         onClose={() => setModalOpen(false)}
@@ -226,13 +306,23 @@ export function DashboardView({
         userCards={initialCards}
         initialData={editingItem}
       />
-      
+
       <EditBillModal
         isOpen={billModalOpen}
         onClose={() => setBillModalOpen(false)}
         item={editingBillItem}
         userId={user.id}
         monthRef={initialMonthRef}
+      />
+
+      <ConfirmationModal
+        isOpen={confirmationOpen}
+        onClose={() => setConfirmationOpen(false)}
+        onConfirm={confirmDelete}
+        title="Excluir item"
+        description={`Tem certeza que deseja excluir "${itemToDelete?.description}"? Essa ação não pode ser desfeita.`}
+        confirmText="Excluir"
+        variant="danger"
       />
     </div>
   );

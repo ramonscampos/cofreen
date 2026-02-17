@@ -149,17 +149,17 @@ export function ExpenseModal({
 
       // CASE A: Card Installments -> Generate SINGLE Master Record in card_transactions
       if (useCard && cardId) {
-          const monthRefStr = format(selectedDate, "yyyy-MM");
+        const monthRefStr = format(selectedDate, "yyyy-MM");
 
-          const { error } = await supabase.from("card_transactions").insert({
-              description,
-              amount: numericAmount,
-              card_id: cardId,
-              user_id: userId,
-              month_ref: monthRefStr,
-              installment_current: current,
-              installment_total: count,
-          });
+        const { error } = await supabase.from("card_transactions").insert({
+          description,
+          amount: numericAmount,
+          card_id: cardId,
+          user_id: userId,
+          month_ref: monthRefStr,
+          installment_current: current,
+          installment_total: count,
+        });
 
         if (error) {
           console.error(error);
@@ -170,30 +170,30 @@ export function ExpenseModal({
           router.refresh();
           onClose();
         }
-      } 
+      }
       // CASE B: Manual Installments -> Create SINGLE recurring_template
       else {
-         const { error } = await supabase.from("recurring_templates").insert({
-            description,
-            default_amount: numericAmount,
-            kind: "expense",
-            user_id: userId,
-            day_of_month: selectedDate.getDate(),
-            month_ref: format(selectedDate, "yyyy-MM"),
-            installment_current: current,
-            installment_total: count,
-            is_active: true
-         });
+        const { error } = await supabase.from("recurring_templates").insert({
+          description,
+          default_amount: numericAmount,
+          kind: "expense",
+          user_id: userId,
+          day_of_month: selectedDate.getDate(),
+          month_ref: format(selectedDate, "yyyy-MM"),
+          installment_current: current,
+          installment_total: count,
+          is_active: true,
+        });
 
-         if (error) {
-            console.error(error);
-            toast.error("Erro ao configurar parcelamento");
-         } else {
-            toast.success("Parcelamento configurado!");
-            triggerTransactionUpdate();
-            router.refresh();
-            onClose();
-         }
+        if (error) {
+          console.error(error);
+          toast.error("Erro ao configurar parcelamento");
+        } else {
+          toast.success("Parcelamento configurado!");
+          triggerTransactionUpdate();
+          router.refresh();
+          onClose();
+        }
       }
 
       setLoading(false);
@@ -208,16 +208,20 @@ export function ExpenseModal({
       description,
       [isRecurring ? "default_amount" : "amount"]: numericAmount, // recurring uses default_amount
       kind: "expense",
+      card_id: useCard ? cardId : null,
       ...(isRecurring
-        ? { day_of_month: Number.parseInt(day) || 1 }
+        ? { day_of_month: Number.parseInt(day, 10) || 1 }
         : {
             month_ref: monthRefStr,
             paid: false,
-            card_id: useCard ? cardId : null,
             is_recurring: false,
           }),
       user_id: userId,
       ...(isRecurring ? { month_ref: monthRefStr, is_active: true } : {}),
+      // Add transaction date only for non-recurring expenses
+      ...(!isRecurring && {
+        transaction_date: `${monthRefStr}-${String(parseInt(day) || (monthRefStr === new Date().toISOString().substring(0, 7) ? new Date().getDate() : 1)).padStart(2, "0")}`,
+      }),
     };
 
     if (initialData?.id) {
@@ -229,8 +233,26 @@ export function ExpenseModal({
           .update(payload)
           .eq("id", initialData.id);
         error = err;
+      } else if (initialData.isCardTransaction) {
+        // CASE 2: Update Card Transaction
+        // We filter payload for card_transactions table
+        const cardPayload = {
+          description,
+          amount: numericAmount,
+          card_id: useCard ? cardId : null,
+          month_ref: monthRefStr,
+          // installment fields?
+          // We can try to keep same installlment counts for now, or update them?
+          // If editing a single transaciton, these likely don't change by default unless explicit UI.
+        };
+
+        const { error: err } = await supabase
+          .from("card_transactions")
+          .update(cardPayload)
+          .eq("id", initialData.id);
+        error = err;
       } else {
-        // CASE 2: Update Existing Transaction
+        // CASE 3: Update Existing Transaction
         const { error: err } = await supabase
           .from("transactions")
           .update(payload)
@@ -315,11 +337,23 @@ export function ExpenseModal({
         </div>
 
         <div className="flex items-center gap-4">
-          <span className="text-sm text-gray-5 whitespace-nowrap">
-            Mês de referência
-          </span>
-          <div className="w-full">
-            <MonthYearPicker date={selectedDate} onChange={setSelectedDate} />
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-5 whitespace-nowrap">Dia:</span>
+            <Input
+              type="number"
+              min="1"
+              max="31"
+              value={day}
+              onChange={(e) => setDay(e.target.value)}
+              className="bg-gray-1 border-none text-white h-10 w-16"
+              placeholder="DD"
+            />
+          </div>
+          <div className="flex items-center gap-2 flex-1">
+            <span className="text-sm text-gray-5 whitespace-nowrap">Mês:</span>
+            <div className="w-full">
+              <MonthYearPicker date={selectedDate} onChange={setSelectedDate} />
+            </div>
           </div>
         </div>
 
@@ -410,7 +444,7 @@ export function ExpenseModal({
                   setIsInstallment(false);
                   setInstallments("");
                 } else {
-                  setDay("");
+                  // Keep day logic flexible
                 }
               }}
               disabled={!!initialData}
@@ -418,23 +452,7 @@ export function ExpenseModal({
           </div>
 
           <div className="flex items-center gap-2  w-full">
-            <span
-              className={cn(
-                "text-sm text-gray-400",
-                (!isRecurring || useCard) && "opacity-50",
-              )}
-            >
-              Dia do mês:
-            </span>
-            <Input
-              type="number"
-              min="1"
-              max="31"
-              value={day}
-              onChange={(e) => setDay(e.target.value)}
-              disabled={!isRecurring || useCard}
-              className="bg-gray-1 border-none text-white h-10 flex-1 disabled:opacity-50"
-            />
+            {/* Day input moved above */}
           </div>
         </div>
 
@@ -452,9 +470,6 @@ export function ExpenseModal({
                         setCardId(null);
                       } else {
                         setCardId(card.id);
-                        if (isRecurring) {
-                          setDay("");
-                        }
                       }
                     }}
                     className={cn(
