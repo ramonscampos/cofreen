@@ -1,0 +1,17 @@
+name: Keep Supabase Awake
+
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Call keep alive endpoint
+        run: |
+          curl -X GET \
+          -H "Authorization: Bearer ${{ secrets.KEEP_ALIVE_TOKEN }}" \
+          https://SEU-DOMINIO.com/api/health/db
