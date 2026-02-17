@@ -3,17 +3,34 @@ import { NextResponse } from "next/server";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
+  const expected = `Bearer ${process.env.KEEP_ALIVE_TOKEN}`;
 
-  if (authHeader !== `Bearer ${process.env.KEEP_ALIVE_TOKEN}`) {
+  if (!authHeader || authHeader !== expected) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  );
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  await supabase.from("drivers").select("id").limit(1);
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return NextResponse.json(
+      { error: "missing supabase env" },
+      { status: 500 },
+    );
+  }
+
+  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false },
+  });
+
+  const { error } = await supabase.from("drivers").select("id").limit(1);
+
+  if (error) {
+    return NextResponse.json(
+      { ok: false, supabaseError: error.message },
+      { status: 500 },
+    );
+  }
 
   return NextResponse.json({ ok: true });
 }
