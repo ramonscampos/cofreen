@@ -14,4 +14,4 @@ jobs:
         run: |
           curl -X GET \
           -H "Authorization: Bearer ${{ secrets.KEEP_ALIVE_TOKEN }}" \
-          https://SEU-DOMINIO.com/api/health/db
+          https://cofreen.vercel.app/api/health/db
