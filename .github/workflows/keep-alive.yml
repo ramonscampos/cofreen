@@ -12,6 +12,6 @@ jobs:
     steps:
       - name: Call keep alive endpoint
         run: |
-          curl -X GET \
+          curl -fsS -X GET \
           -H "Authorization: Bearer ${{ secrets.KEEP_ALIVE_TOKEN }}" \
-          https://cofreen.vercel.app/api/health/db
+          https://SEU-DOMINIO.com/api/health/db
