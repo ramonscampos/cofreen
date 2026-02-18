@@ -47,7 +47,8 @@ export async function updateSession(request: NextRequest) {
   // Define public routes that can be accessed without authentication
   const isPublicRoute = 
     path.startsWith("/login") || 
-    path.startsWith("/auth");
+    path.startsWith("/auth") ||
+    path.startsWith("/api/health/db");
 
   if (user) {
     // If user is logged in and trying to access login page or root, redirect to dashboard

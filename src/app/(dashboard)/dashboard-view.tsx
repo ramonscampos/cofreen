@@ -76,14 +76,6 @@ export function DashboardView({
     initialCardTransactions,
   ]);
 
-  console.log("DashboardView Render:", {
-    monthRef: initialMonthRef,
-    cardsCount: initialCards.length,
-    cardTransCount: initialCardTransactions.length,
-    itemsCount: items.length,
-    cards: initialCards,
-  });
-
   const openNewModal = (kind: Kind) => {
     setEditingItem(null);
     setModalKind(kind);
@@ -173,11 +165,7 @@ export function DashboardView({
       return;
     }
 
-    if (
-      item.originalTemplateId &&
-      !item.transactionId &&
-      !item.paid
-    ) {
+    if (item.originalTemplateId && !item.transactionId && !item.paid) {
       // It's a template projection being paid. Create it as a real Transaction.
       const { error } = await supabase.from("transactions").insert({
         description: item.description,
@@ -247,8 +235,6 @@ export function DashboardView({
           <ChevronRight size={16} />
         </button>
       </div>
-
-
 
       <div className="flex justify-end mb-2">
         <div className="flex bg-[#202024] rounded-md p-1 gap-1">
