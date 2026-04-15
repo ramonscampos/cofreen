@@ -1,6 +1,6 @@
 "use client";
 
-import { format, parse, isValid } from "date-fns";
+import { format, isValid, parse } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -11,25 +11,27 @@ import { MoneyInput } from "@/components/ui/money-input";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { Switch } from "@/components/ui/switch";
 import { triggerTransactionUpdate } from "@/lib/events";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
+import type {
+  ActionResult,
+  CreateTemplatePayload,
+  CreateTransactionPayload,
+  DashboardItem,
+} from "@/types";
 
 interface IncomeModalProps {
   isOpen: boolean;
   onClose: () => void;
-  userId: string;
   defaultMonthRef?: string;
-  initialData?: any; // Using any for DashboardItem flexibility, ideally strict type
+  initialData?: DashboardItem | null;
 }
 
 export function IncomeModal({
   isOpen,
   onClose,
-  userId,
   defaultMonthRef,
   initialData,
 }: IncomeModalProps) {
-  const supabase = createClient();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
@@ -44,41 +46,40 @@ export function IncomeModal({
   // Effect to populate form on open/initialData change
   useEffect(() => {
     if (isOpen) {
-       if (initialData) {
-          setDescription(initialData.description);
-          setAmount(initialData.amount?.toString() || "");
-          setIsRecurring(initialData.isRecurring || initialData.is_recurring || false);
-          
-          if (initialData.day_of_month) {
-             setDay(initialData.day_of_month.toString());
-          }
-          
-          const ref = initialData.month_ref || defaultMonthRef;
-          if (ref) {
-             setSelectedDate(parse(ref, "yyyy-MM", new Date()));
-          }
-       } else {
-          // Reset for new creation
-          setDescription("");
-          setAmount("");
-          setIsRecurring(false);
-          setDay(String(new Date().getDate()));
-          if (defaultMonthRef) {
-            setSelectedDate(parse(defaultMonthRef, "yyyy-MM", new Date()));
-          } else {
-            setSelectedDate(new Date());
-          }
-       }
+      if (initialData) {
+        setDescription(initialData.description);
+        setAmount(initialData.amount?.toString() || "");
+        setIsRecurring(initialData.isRecurring || false);
+
+        if (initialData.day) {
+          setDay(initialData.day.toString());
+        }
+        const ref = initialData.monthRef || defaultMonthRef;
+
+        if (ref) {
+          setSelectedDate(parse(ref, "yyyy-MM", new Date()));
+        }
+      } else {
+        // Reset for new creation
+        setDescription("");
+        setAmount("");
+        setIsRecurring(false);
+        setDay(String(new Date().getDate()));
+        if (defaultMonthRef) {
+          setSelectedDate(parse(defaultMonthRef, "yyyy-MM", new Date()));
+        } else {
+          setSelectedDate(new Date());
+        }
+      }
     }
   }, [isOpen, initialData, defaultMonthRef]);
-
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     const numericAmount = parseFloat(amount.replace(",", "."));
-    if (isNaN(numericAmount)) {
+    if (Number.isNaN(numericAmount)) {
       toast.error("Valor inválido");
       setLoading(false);
       return;
@@ -90,57 +91,70 @@ export function IncomeModal({
       return;
     }
 
-    let error = null;
+    let result: ActionResult;
     const monthRefStr = format(selectedDate, "yyyy-MM");
 
     const payload = {
-        description,
-        [isRecurring ? 'default_amount' : 'amount']: numericAmount,
-        kind: "incoming",
-        ...(isRecurring ? { day_of_month: parseInt(day) } : { month_ref: monthRefStr, paid: true, is_recurring: false }),
-        user_id: userId,
-        ...(isRecurring ? { month_ref: monthRefStr, is_active: true } : {}), // recurring also has month_ref usually as start
-        // Add transaction date only for non-recurring income
-        ...(!isRecurring && { transaction_date: new Date().toISOString().split("T")[0] }),
+      description,
+      [isRecurring ? "defaultAmount" : "amount"]: numericAmount.toString(),
+      kind: "incoming",
+      ...(isRecurring
+        ? { dayOfMonth: parseInt(day, 10) }
+        : { monthRef: monthRefStr, paid: true, isRecurring: false }),
+      ...(isRecurring ? { monthRef: monthRefStr, isActive: true } : {}), // recurring also has monthRef usually as start
+      // Add transaction date only for non-recurring income
+      ...(!isRecurring && {
+        transactionDate: new Date().toISOString().split("T")[0],
+      }),
     };
 
+    const { createTemplateAction, updateTemplateAction } = await import(
+      "@/app/actions/templates"
+    );
+    const { createTransactionAction, updateTransactionAction } = await import(
+      "@/app/actions/transactions"
+    );
+
     if (initialData?.id) {
-       // UPDATE
-       // Check if we are updating a recurring template or a transaction
-       const table = initialData.isRecurring ? "recurring_templates" : "transactions";
-       // Note: Switch from recurring to transaction or vice versa is tricky here without delete/create. 
-       // For now assuming we stick to the original type or simple updates.
-       
-       const { error: err } = await supabase
-         .from(table)
-         .update(payload)
-         .eq("id", initialData.id);
-       error = err;
-       
+      // UPDATE
+      if (initialData.isRecurring) {
+        result = await updateTemplateAction(
+          initialData.id,
+          payload as Partial<CreateTemplatePayload>,
+        );
+      } else {
+        result = await updateTransactionAction(
+          initialData.id,
+          payload as Partial<CreateTransactionPayload>,
+        );
+      }
     } else {
-        // CREATE
-        if (isRecurring) {
-          const { error: err } = await supabase.from("recurring_templates").insert(payload);
-          error = err;
-        } else {
-          const { error: err } = await supabase.from("transactions").insert(payload);
-          error = err;
-        }
+      // CREATE
+      if (isRecurring) {
+        result = await createTemplateAction(
+          payload as unknown as CreateTemplatePayload,
+        );
+      } else {
+        result = await createTransactionAction(
+          payload as unknown as CreateTransactionPayload,
+        );
+      }
     }
 
     setLoading(false);
 
-    if (!error) {
-      toast.success(initialData ? "Entrada atualizada!" : "Entrada cadastrada!");
+    if (result.success) {
+      toast.success(
+        initialData ? "Entrada atualizada!" : "Entrada cadastrada!",
+      );
       triggerTransactionUpdate();
       router.refresh();
       onClose();
     } else {
-      toast.error("Erro ao salvar entrada");
-      console.error(error);
+      toast.error(result.error || "Erro ao salvar entrada");
     }
   };
-  
+
   // No handleClose needed specifically if we use useEffect to reset/populate
 
   return (
@@ -152,7 +166,11 @@ export function IncomeModal({
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
+          <label htmlFor="income-description" className="sr-only">
+            Descrição
+          </label>
           <Input
+            id="income-description"
             placeholder="Descrição"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -162,7 +180,11 @@ export function IncomeModal({
         </div>
 
         <div>
+          <label htmlFor="income-amount" className="sr-only">
+            Preço
+          </label>
           <MoneyInput
+            id="income-amount"
             placeholder="Preço"
             value={amount}
             onValueChange={(value) => setAmount(value || "")}
@@ -173,10 +195,17 @@ export function IncomeModal({
 
         <div className="flex items-center justify-between py-2 gap-4">
           <div className="flex items-center gap-2 shrink-0">
-            <span className={cn("text-white text-sm", !!initialData && "opacity-50")}>Recorrente?</span>
-            <Switch 
-              checked={isRecurring} 
-              onCheckedChange={setIsRecurring} 
+            <span
+              className={cn(
+                "text-white text-sm",
+                !!initialData && "opacity-50",
+              )}
+            >
+              Recorrente?
+            </span>
+            <Switch
+              checked={isRecurring}
+              onCheckedChange={setIsRecurring}
               disabled={!!initialData}
             />
           </div>
@@ -193,10 +222,14 @@ export function IncomeModal({
 
         {isRecurring && (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-white whitespace-nowrap">
+            <label
+              htmlFor="income-day"
+              className="text-sm text-white whitespace-nowrap"
+            >
               Dia do mês:
-            </span>
+            </label>
             <Input
+              id="income-day"
               type="number"
               min="1"
               max="31"

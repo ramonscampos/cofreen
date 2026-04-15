@@ -3,30 +3,28 @@
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
+import { deleteTemplateAction } from "@/app/actions/templates";
 import { TemplateForm } from "@/components/templates/template-form";
 import { Button } from "@/components/ui/button";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { Modal } from "@/components/ui/modal";
-import { createClient } from "@/lib/supabase/client";
-import type { RecurringTemplate, User } from "@/types";
+import type { RecurringTemplate } from "@/types";
 
 interface TemplateManagerProps {
-  user: User;
   initialTemplates: RecurringTemplate[];
 }
 
-export function TemplateManager({
-  user,
-  initialTemplates,
-}: TemplateManagerProps) {
-  const router = useRouter();
-  const supabase = createClient();
+export function TemplateManager({ initialTemplates }: TemplateManagerProps) {
+  const _router = useRouter();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] =
     useState<RecurringTemplate | null>(null);
 
   const [confirmationOpen, setConfirmationOpen] = useState(false);
-  const [templateToDelete, setTemplateToDelete] = useState<RecurringTemplate | null>(null);
+  const [templateToDelete, setTemplateToDelete] =
+    useState<RecurringTemplate | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleEdit = (template: RecurringTemplate) => {
     setEditingTemplate(template);
@@ -40,13 +38,17 @@ export function TemplateManager({
 
   const confirmDelete = async () => {
     if (!templateToDelete) return;
+    setIsDeleting(true);
 
-    const { error } = await supabase
-      .from("recurring_templates")
-      .delete()
-      .eq("id", templateToDelete.id);
+    const result = await deleteTemplateAction(templateToDelete.id);
 
-    if (!error) router.refresh();
+    if (result.success) {
+      toast.success("Modelo excluído com sucesso!");
+      setConfirmationOpen(false);
+    } else {
+      toast.error(result.error || "Erro ao excluir modelo");
+    }
+    setIsDeleting(false);
   };
 
   return (
@@ -83,9 +85,7 @@ export function TemplateManager({
                 >
                   {template.kind === "incoming" ? "Entrada" : "Despesa"}
                 </span>
-                <span className="text-xs text-zinc-500">
-                  Dia {template.day_of_month}
-                </span>
+                Dia {template.dayOfMonth}
               </div>
               <div className="font-semibold text-lg">
                 {template.description}
@@ -94,7 +94,7 @@ export function TemplateManager({
                 {new Intl.NumberFormat("pt-BR", {
                   style: "currency",
                   currency: "BRL",
-                }).format(Number(template.default_amount))}
+                }).format(Number(template.defaultAmount))}
               </div>
             </div>
 
@@ -128,7 +128,6 @@ export function TemplateManager({
       >
         <TemplateForm
           onClose={() => setModalOpen(false)}
-          userId={user.id}
           initialData={editingTemplate}
         />
       </Modal>
@@ -139,7 +138,7 @@ export function TemplateManager({
         onConfirm={confirmDelete}
         title="Excluir modelo"
         description={`Tem certeza que deseja excluir o modelo "${templateToDelete?.description}"? Isso não afetará transações passadas.`}
-        confirmText="Excluir"
+        confirmText={isDeleting ? "Excluindo..." : "Excluir"}
         variant="danger"
       />
     </div>

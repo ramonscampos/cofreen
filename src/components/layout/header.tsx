@@ -4,17 +4,18 @@ import { LogOut, User } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { signOut, useSession } from "next-auth/react";
 import { useEffect, useMemo, useState } from "react";
+import { getDashboardSummaryAction } from "@/app/actions/dashboard";
 import { MonthSwitcher } from "@/components/dashboard/month-switcher";
 import { SummaryCards } from "@/components/dashboard/summary-cards";
-import { Button } from "@/components/ui/button";
+import { TRANSACTION_UPDATED_EVENT } from "@/lib/events";
 import {
   calculateTotals,
   getCurrentMonthRef,
   mergeTransactionsAndTemplates,
 } from "@/lib/finance-logic";
-import { TRANSACTION_UPDATED_EVENT } from "@/lib/events";
-import { createClient } from "@/lib/supabase/client";
+
 import type {
   Card,
   CardTransaction,
@@ -23,12 +24,12 @@ import type {
 } from "@/types";
 
 export function Header() {
-  const supabase = createClient();
-  const router = useRouter();
+  const _router = useRouter();
   const searchParams = useSearchParams();
   const monthRef = searchParams.get("month") || getCurrentMonthRef();
 
-  const [user, setUser] = useState<any>(null);
+  const { data: session } = useSession();
+  const user = session?.user;
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Data state for Summary Cards
@@ -41,36 +42,14 @@ export function Header() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUser(user);
-
       if (user) {
-        // Fetch Summary Data
-        const [txRes, tmplRes, cardRes, cardTxRes] = await Promise.all([
-          supabase
-            .from("transactions")
-            .select("*")
-            .eq("user_id", user.id)
-            .eq("month_ref", monthRef),
-          supabase
-            .from("recurring_templates")
-            .select("*")
-            .eq("user_id", user.id)
-            .eq("is_active", true),
-          supabase.from("cards").select("*").eq("user_id", user.id),
-          supabase
-            .from("card_transactions")
-            .select("*")
-            .eq("user_id", user.id)
-            .or(`month_ref.eq.${monthRef},installment_total.gt.1`),
-        ]);
-
-        if (txRes.data) setTransactions(txRes.data);
-        if (tmplRes.data) setTemplates(tmplRes.data);
-        if (cardRes.data) setCards(cardRes.data);
-        if (cardTxRes.data) setCardTransactions(cardTxRes.data);
+        const result = await getDashboardSummaryAction(monthRef);
+        if (result.success && result.data) {
+          setTransactions(result.data.transactions);
+          setTemplates(result.data.templates);
+          setCards(result.data.cards);
+          setCardTransactions(result.data.cardTransactions);
+        }
       }
     };
 
@@ -87,7 +66,7 @@ export function Header() {
         window.removeEventListener(TRANSACTION_UPDATED_EVENT, handleUpdate);
       }
     };
-  }, [supabase, monthRef]); // Re-fetch when month changes
+  }, [user, monthRef]); // Re-fetch when month changes
 
   const items = useMemo(() => {
     return mergeTransactionsAndTemplates(
@@ -104,8 +83,7 @@ export function Header() {
   }, [items]);
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.replace("/login");
+    await signOut({ callbackUrl: "/login" });
   };
 
   return (
@@ -139,10 +117,10 @@ export function Header() {
               onClick={() => setMenuOpen(!menuOpen)}
               className="relative w-12 h-12 rounded-full overflow-hidden border-2 border-[#00875f] focus:outline-none transition-transform hover:scale-105"
             >
-              {user?.user_metadata?.avatar_url ? (
+              {user?.image ? (
                 <Image
-                  src={user.user_metadata.avatar_url}
-                  alt={user.user_metadata.full_name || "User"}
+                  src={user.image}
+                  alt={user.name || "User"}
                   fill
                   className="object-cover"
                 />
@@ -162,7 +140,7 @@ export function Header() {
                 <div className="absolute right-0 top-14 w-48 bg-[#202024] border border-zinc-800 rounded-md shadow-xl z-50 py-1 flex flex-col">
                   <div className="px-4 py-3 border-b border-zinc-800 mb-1">
                     <p className="text-sm font-medium text-white truncate">
-                      {user?.user_metadata?.full_name || "Usuário"}
+                      {user?.name || "Usuário"}
                     </p>
                     <p className="text-xs text-zinc-500 truncate">
                       {user?.email}

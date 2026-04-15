@@ -3,25 +3,22 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import {
+  createTemplateAction,
+  updateTemplateAction,
+} from "@/app/actions/templates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { createClient } from "@/lib/supabase/client";
-import type { Kind, RecurringTemplate } from "@/types";
+import type { ActionResult, Kind, RecurringTemplate } from "@/types";
 
 interface TemplateFormProps {
   onClose: () => void;
-  userId: string;
   initialData?: RecurringTemplate | null;
 }
 
-export function TemplateForm({
-  onClose,
-  userId,
-  initialData,
-}: TemplateFormProps) {
-  const supabase = createClient();
-  const router = useRouter();
+export function TemplateForm({ onClose, initialData }: TemplateFormProps) {
+  const _router = useRouter();
   const [loading, setLoading] = useState(false);
 
   const [kind, setKind] = useState<Kind>(initialData?.kind || "expense");
@@ -29,9 +26,9 @@ export function TemplateForm({
     initialData?.description || "",
   );
   const [amount, setAmount] = useState(
-    initialData?.default_amount?.toString() || "",
+    initialData?.defaultAmount?.toString() || "",
   );
-  const [day, setDay] = useState(initialData?.day_of_month?.toString() || "1");
+  const [day, setDay] = useState(initialData?.dayOfMonth?.toString() || "1");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,51 +37,57 @@ export function TemplateForm({
     const payload = {
       kind,
       description,
-      default_amount: parseFloat(amount.replace(",", ".")),
-      day_of_month: parseInt(day),
-      user_id: userId,
-      is_active: true,
+      defaultAmount: parseFloat(amount.replace(",", ".")).toString(),
+      dayOfMonth: parseInt(day, 10),
+      isActive: true,
     };
 
-    let error = null;
+    let result: ActionResult;
 
     if (initialData?.id) {
-      const { error: err } = await supabase
-        .from("recurring_templates")
-        .update(payload)
-        .eq("id", initialData.id);
-      error = err;
+      result = await updateTemplateAction(initialData.id, payload);
     } else {
-      const { error: err } = await supabase
-        .from("recurring_templates")
-        .insert(payload);
-      error = err;
+      result = await createTemplateAction(payload);
     }
 
     setLoading(false);
 
-    if (!error) {
+    if (result.success) {
       toast.success("Modelo salvo com sucesso!");
-      router.refresh();
       onClose();
     } else {
-      toast.error("Erro ao salvar modelo");
+      toast.error(result.error || "Erro ao salvar modelo");
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <span className="text-sm font-medium text-zinc-400">Tipo</span>
-        <Select value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
+        <label
+          htmlFor="template-kind"
+          className="text-sm font-medium text-zinc-400 block mb-1"
+        >
+          Tipo
+        </label>
+        <Select
+          id="template-kind"
+          value={kind}
+          onChange={(e) => setKind(e.target.value as Kind)}
+        >
           <option value="incoming">Entrada</option>
           <option value="expense">Despesa</option>
         </Select>
       </div>
 
       <div>
-        <span className="text-sm font-medium text-zinc-400">Descrição</span>
+        <label
+          htmlFor="template-description"
+          className="text-sm font-medium text-zinc-400 block mb-1"
+        >
+          Descrição
+        </label>
         <Input
+          id="template-description"
           autoFocus
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -93,8 +96,14 @@ export function TemplateForm({
       </div>
 
       <div>
-        <span className="text-sm font-medium text-zinc-400">Valor Padrão</span>
+        <label
+          htmlFor="template-amount"
+          className="text-sm font-medium text-zinc-400 block mb-1"
+        >
+          Valor Padrão
+        </label>
         <Input
+          id="template-amount"
           type="number"
           step="0.01"
           value={amount}
@@ -104,10 +113,14 @@ export function TemplateForm({
       </div>
 
       <div>
-        <span className="text-sm font-medium text-zinc-400">
+        <label
+          htmlFor="template-day"
+          className="text-sm font-medium text-zinc-400 block mb-1"
+        >
           Dia do Mês (Previsão)
-        </span>
+        </label>
         <Input
+          id="template-day"
           type="number"
           min="1"
           max="31"

@@ -25,7 +25,7 @@ export function TransactionList({
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   const handleToggle = (id: string | number) => {
-    setOpenItemId(current => current === id ? null : id);
+    setOpenItemId((current) => (current === id ? null : id));
   };
 
   const handleSort = (field: "day" | "amount") => {
@@ -47,8 +47,14 @@ export function TransactionList({
         valB = b.day || 0;
       } else {
         // For amount, we use the display amount (considering installments)
-        valA = a.installmentTotal && a.installmentTotal > 1 ? a.amount / a.installmentTotal : a.amount;
-        valB = b.installmentTotal && b.installmentTotal > 1 ? b.amount / b.installmentTotal : b.amount;
+        valA =
+          a.installmentTotal && a.installmentTotal > 1
+            ? a.amount / a.installmentTotal
+            : a.amount;
+        valB =
+          b.installmentTotal && b.installmentTotal > 1
+            ? b.amount / b.installmentTotal
+            : b.amount;
       }
 
       if (valA < valB) return sortOrder === "asc" ? -1 : 1;
@@ -58,31 +64,45 @@ export function TransactionList({
   };
 
   const sortedItems = sortItems(initialItems);
-  const incomings = viewMode === "grouped" ? sortItems(initialItems.filter(i => i.kind === "incoming")) : [];
-  const expenses = viewMode === "grouped" ? sortItems(initialItems.filter(i => i.kind === "expense")) : [];
+  const incomings =
+    viewMode === "grouped"
+      ? sortItems(initialItems.filter((i) => i.kind === "incoming"))
+      : [];
+  const expenses =
+    viewMode === "grouped"
+      ? sortItems(initialItems.filter((i) => i.kind === "expense"))
+      : [];
 
   return (
     <div className="space-y-4">
       <div className="space-y-4 mt-8">
         <div className="grid grid-cols-[4fr_2fr_2fr_1fr] gap-4 px-6 text-sm text-zinc-500 mb-2 select-none">
-          <div className="flex items-center gap-1 cursor-default">Descrição</div>
-          <div 
+          <div className="flex items-center gap-1 cursor-default">
+            Descrição
+          </div>
+          <div
             className="flex items-center gap-1 cursor-pointer hover:text-zinc-300 transition-colors"
             onClick={() => handleSort("amount")}
           >
             Valor
-            {sortBy === "amount" && (
-              sortOrder === "asc" ? <ArrowUp size={14} /> : <ArrowDown size={14} />
-            )}
+            {sortBy === "amount" &&
+              (sortOrder === "asc" ? (
+                <ArrowUp size={14} />
+              ) : (
+                <ArrowDown size={14} />
+              ))}
           </div>
-          <div 
+          <div
             className="flex items-center gap-1 cursor-pointer hover:text-zinc-300 transition-colors"
             onClick={() => handleSort("day")}
           >
             Data
-            {sortBy === "day" && (
-              sortOrder === "asc" ? <ArrowUp size={14} /> : <ArrowDown size={14} />
-            )}
+            {sortBy === "day" &&
+              (sortOrder === "asc" ? (
+                <ArrowUp size={14} />
+              ) : (
+                <ArrowDown size={14} />
+              ))}
           </div>
           <div className="text-right pr-4">Parcelas</div>
         </div>
@@ -103,7 +123,7 @@ export function TransactionList({
                 onEdit={onEdit}
               />
             ))}
-            
+
             {incomings.length > 0 && expenses.length > 0 && (
               <div className="border-t border-zinc-800 my-4" />
             )}

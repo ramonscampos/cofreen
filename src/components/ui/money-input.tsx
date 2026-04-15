@@ -1,7 +1,9 @@
 "use client";
 
 import * as React from "react";
-import CurrencyInput, { CurrencyInputProps } from "react-currency-input-field";
+import CurrencyInput, {
+  type CurrencyInputProps,
+} from "react-currency-input-field";
 import { cn } from "@/lib/utils";
 
 export interface MoneyInputProps extends Omit<CurrencyInputProps, "className"> {
@@ -21,15 +23,15 @@ export const MoneyInput = React.forwardRef<HTMLInputElement, MoneyInputProps>(
           groupSeparator="."
           className={cn(
             "flex h-12 w-full rounded-md border border-zinc-800 bg-zinc-950 pl-9 pr-3 py-2 text-sm text-white placeholder:text-zinc-500 focus-visible:outline-none focus:border-[#00875f] disabled:cursor-not-allowed disabled:opacity-50 transition-colors",
-            className
+            className,
           )}
           onValueChange={onValueChange}
-          title="Input currency" 
+          title="Input currency"
           ref={ref}
           {...props}
         />
       </div>
     );
-  }
+  },
 );
 MoneyInput.displayName = "MoneyInput";

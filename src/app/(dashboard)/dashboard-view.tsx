@@ -7,20 +7,18 @@ import { TransactionList } from "@/components/dashboard/transaction-list";
 import { Button } from "@/components/ui/button";
 import { triggerTransactionUpdate } from "@/lib/events";
 import { mergeTransactionsAndTemplates } from "@/lib/finance-logic";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 import type {
+  ActionResult,
   Card,
   CardTransaction,
   DashboardItem,
   Kind,
   RecurringTemplate,
   Transaction,
-  User,
 } from "@/types";
 
 interface DashboardViewProps {
-  user: User;
   initialMonthRef: string;
   initialTransactions: Transaction[];
   initialTemplates: RecurringTemplate[];
@@ -37,7 +35,6 @@ import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 // ... existing imports
 
 export function DashboardView({
-  user,
   initialMonthRef,
   initialTransactions,
   initialTemplates,
@@ -83,8 +80,6 @@ export function DashboardView({
   };
 
   /* Handlers */
-  const supabase = createClient();
-
   const handleEdit = (item: DashboardItem) => {
     // Check if it's a Card Bill (Virtual or Manual)
     if (item.cardId) {
@@ -107,55 +102,56 @@ export function DashboardView({
     if (!itemToDelete) return;
     const item = itemToDelete;
 
-    let error = null;
+    let result: ActionResult;
     if (
       item.isRecurring ||
       (item.originalTemplateId && item.originalTemplateId === item.id)
     ) {
-      const { error: err } = await supabase
-        .from("recurring_templates")
-        .delete()
-        .eq("id", item.id);
-      error = err;
+      const { deleteTemplateAction } = await import("@/app/actions/templates");
+      result = await deleteTemplateAction(item.id);
     } else if (item.isCardTransaction) {
-      const { error: err } = await supabase
-        .from("card_transactions")
-        .delete()
-        .eq("id", item.id);
-      error = err;
+      const { deleteTransactionAction } = await import(
+        "@/app/actions/transactions"
+      );
+      result = await deleteTransactionAction(item.id, true);
     } else {
-      const { error: err } = await supabase
-        .from("transactions")
-        .delete()
-        .eq("id", item.id);
-      error = err;
+      const { deleteTransactionAction } = await import(
+        "@/app/actions/transactions"
+      );
+      result = await deleteTransactionAction(item.id, false);
     }
 
-    if (!error) {
+    if (result.success) {
       toast.success("Item removido com sucesso");
       triggerTransactionUpdate();
+      setConfirmationOpen(false);
       router.refresh();
     } else {
-      toast.error("Erro ao remover item");
+      toast.error(result.error || "Erro ao remover item");
     }
   };
 
   const handleMarkAsPaid = async (item: DashboardItem) => {
+    const { createTransactionAction, updateTransactionAction } = await import(
+      "@/app/actions/transactions"
+    );
+
     if (item.id.toString().startsWith("virtual-card-")) {
       // It's a virtual card bill being paid. Create it as a Paid Transaction.
-      const { error } = await supabase.from("transactions").insert({
-        description: item.description,
-        amount: item.amount,
-        kind: "expense", // Bill is expense
-        month_ref: initialMonthRef, // Ensure we use the current view month
-        paid: true,
-        card_id: item.cardId,
-        user_id: user.id,
-        is_recurring: false,
-        transaction_date: `${initialMonthRef}-${String(item.day || 1).padStart(2, "0")}`,
-      });
+      const result = await createTransactionAction(
+        {
+          description: item.description,
+          amount: item.amount,
+          kind: "expense", // Bill is expense
+          monthRef: initialMonthRef, // Ensure we use the current view month
+          paid: true,
+          cardId: item.cardId,
+          isRecurring: false,
+        },
+        false,
+      );
 
-      if (!error) {
+      if (result.success) {
         toast.success("Fatura paga criada!");
         triggerTransactionUpdate();
         router.refresh();
@@ -167,37 +163,36 @@ export function DashboardView({
 
     if (item.originalTemplateId && !item.transactionId && !item.paid) {
       // It's a template projection being paid. Create it as a real Transaction.
-      const { error } = await supabase.from("transactions").insert({
-        description: item.description,
-        amount: item.amount,
-        kind: item.kind,
-        month_ref: initialMonthRef,
-        paid: true,
-        template_id: item.originalTemplateId,
-        user_id: user.id,
-        is_recurring: item.isRecurring,
-        installment_current: item.installmentCurrent,
-        installment_total: item.installmentTotal,
-        transaction_date: `${initialMonthRef}-${String(item.day || 1).padStart(2, "0")}`,
-      });
+      const result = await createTransactionAction(
+        {
+          description: item.description,
+          amount: item.amount,
+          kind: item.kind,
+          monthRef: initialMonthRef,
+          paid: true,
+          templateId: item.originalTemplateId,
+          isRecurring: item.isRecurring,
+        },
+        false,
+      );
 
-      if (!error) {
+      if (result.success) {
         toast.success("Transação recorrente paga!");
         triggerTransactionUpdate();
         router.refresh();
       } else {
-        console.error(error);
         toast.error("Erro ao processar transação recorrente");
       }
       return;
     }
 
-    const { error } = await supabase
-      .from("transactions")
-      .update({ paid: !item.paid })
-      .eq("id", item.id);
+    const result = await updateTransactionAction(
+      item.id,
+      { paid: !item.paid },
+      !!item.isCardTransaction,
+    );
 
-    if (!error) {
+    if (result.success) {
       toast.success(item.paid ? "Marcado como não pago" : "Marcado como pago");
       triggerTransactionUpdate();
       router.refresh();
@@ -239,6 +234,7 @@ export function DashboardView({
       <div className="flex justify-end mb-2">
         <div className="flex bg-[#202024] rounded-md p-1 gap-1">
           <button
+            type="button"
             onClick={() => setViewMode("mixed")}
             className={cn(
               "p-1.5 rounded-md transition-all hover:text-white",
@@ -251,6 +247,7 @@ export function DashboardView({
             <List size={18} />
           </button>
           <button
+            type="button"
             onClick={() => setViewMode("grouped")}
             className={cn(
               "p-1.5 rounded-md transition-all hover:text-white",
@@ -279,7 +276,6 @@ export function DashboardView({
       <IncomeModal
         isOpen={modalOpen && modalKind === "incoming"}
         onClose={() => setModalOpen(false)}
-        userId={user.id}
         defaultMonthRef={initialMonthRef}
         initialData={editingItem}
       />
@@ -287,7 +283,6 @@ export function DashboardView({
       <ExpenseModal
         isOpen={modalOpen && modalKind === "expense"}
         onClose={() => setModalOpen(false)}
-        userId={user.id}
         monthRef={initialMonthRef}
         userCards={initialCards}
         initialData={editingItem}
@@ -297,7 +292,6 @@ export function DashboardView({
         isOpen={billModalOpen}
         onClose={() => setBillModalOpen(false)}
         item={editingBillItem}
-        userId={user.id}
         monthRef={initialMonthRef}
       />
 

@@ -3,30 +3,27 @@
 import { ChevronLeft, CreditCard, Pencil, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { toast } from "sonner";
+import { deleteCardAction } from "@/app/actions/cards";
 import { CardForm } from "@/components/cards/card-form";
 import { Button } from "@/components/ui/button";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 import { Modal } from "@/components/ui/modal";
-import { createClient } from "@/lib/supabase/client";
-import type { Card, User } from "@/types";
+import type { Card } from "@/types";
 
 interface CardManagerProps {
-  user: User;
   initialCards: Card[];
 }
 
-export function CardManager({
-  user,
-  initialCards,
-}: CardManagerProps) {
+export function CardManager({ initialCards }: CardManagerProps) {
   const router = useRouter();
-  const supabase = createClient();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
 
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [cardToDelete, setCardToDelete] = useState<Card | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = (card: Card) => {
     setCardToDelete(card);
@@ -35,13 +32,18 @@ export function CardManager({
 
   const confirmDelete = async () => {
     if (!cardToDelete) return;
+    setIsDeleting(true);
 
-    const { error } = await supabase
-      .from("cards")
-      .delete()
-      .eq("id", cardToDelete.id);
+    const result = await deleteCardAction(cardToDelete.id);
 
-    if (!error) router.refresh();
+    if (result.success) {
+      setConfirmationOpen(false);
+      toast.success("Cartão excluído com sucesso!");
+    } else {
+      toast.error(result.error || "Erro ao excluir o cartão.");
+    }
+
+    setIsDeleting(false);
   };
 
   return (
@@ -79,6 +81,11 @@ export function CardManager({
             onDelete={(card) => handleDelete(card)}
           />
         ))}
+        {initialCards.length === 0 && (
+          <div className="text-zinc-500 text-center py-6">
+            Você ainda não possui cartões cadastrados.
+          </div>
+        )}
       </div>
 
       <Modal
@@ -89,19 +96,17 @@ export function CardManager({
       >
         <CardForm
           onClose={() => setModalOpen(false)}
-          userId={user.id}
           initialData={editingCard}
         />
       </Modal>
-
 
       <ConfirmationModal
         isOpen={confirmationOpen}
         onClose={() => setConfirmationOpen(false)}
         onConfirm={confirmDelete}
         title="Excluir cartão"
-        description={`Tem certeza que deseja excluir o cartão "${cardToDelete?.bank_name}"? Essa ação não pode ser desfeita.`}
-        confirmText="Excluir"
+        description={`Tem certeza que deseja excluir o cartão "${cardToDelete?.bankName}"?`}
+        confirmText={isDeleting ? "Excluindo..." : "Excluir"}
         variant="danger"
       />
     </div>
@@ -156,14 +161,12 @@ function CardItem({ card, onEdit, onDelete }: CardItemProps) {
           <div className="flex flex-1 items-center gap-4 pr-8">
             <CreditCard className="h-6 w-6 text-zinc-400" />
             <div>
-              <div className="font-semibold text-lg">{card.bank_name}</div>
+              <div className="font-semibold text-lg">{card.bankName}</div>
               {card.description && (
                 <div className="text-sm text-zinc-500">{card.description}</div>
               )}
             </div>
-            <div className="ml-auto text-sm text-zinc-400">
-              Vence dia {card.due_day}
-            </div>
+            Vence dia {card.dueDay}
           </div>
         </div>
       </div>

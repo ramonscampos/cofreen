@@ -1,6 +1,14 @@
+import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { auth } from "@/auth";
+import { db } from "@/db";
+import {
+  cards,
+  cardTransactions,
+  recurringTemplates,
+  transactions,
+} from "@/db/schema";
 import { getCurrentMonthRef } from "@/lib/finance-logic";
-import { createClient } from "@/lib/supabase/server";
 import { DashboardView } from "../dashboard-view";
 
 interface SearchParams {
@@ -12,13 +20,9 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<SearchParams>;
 }) {
-  const supabase = await createClient();
+  const session = await auth();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!session?.user?.id) {
     return redirect("/login");
   }
 
@@ -30,35 +34,43 @@ export default async function DashboardPage({
   // We fetch in parallel for performance
   const [transactionsRes, templatesRes, cardsRes, cardTransRes] =
     await Promise.all([
-      supabase
-        .from("transactions")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("month_ref", monthRef),
-
-      supabase
-        .from("recurring_templates")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("is_active", true),
-
-      supabase.from("cards").select("*").eq("user_id", user.id),
-
-      supabase // For virtual bill calculation
-        .from("card_transactions")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("month_ref", monthRef),
+      db
+        .select()
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.userId, session.user.id),
+            eq(transactions.monthRef, monthRef),
+          ),
+        ),
+      db
+        .select()
+        .from(recurringTemplates)
+        .where(
+          and(
+            eq(recurringTemplates.userId, session.user.id),
+            eq(recurringTemplates.isActive, true),
+          ),
+        ),
+      db.select().from(cards).where(eq(cards.userId, session.user.id)),
+      db
+        .select()
+        .from(cardTransactions)
+        .where(
+          and(
+            eq(cardTransactions.userId, session.user.id),
+            eq(cardTransactions.monthRef, monthRef),
+          ),
+        ),
     ]);
 
   return (
     <DashboardView
-      user={user}
       initialMonthRef={monthRef}
-      initialTransactions={transactionsRes.data || []}
-      initialTemplates={templatesRes.data || []}
-      initialCards={cardsRes.data || []}
-      initialCardTransactions={cardTransRes.data || []}
+      initialTransactions={transactionsRes}
+      initialTemplates={templatesRes}
+      initialCards={cardsRes}
+      initialCardTransactions={cardTransRes}
     />
   );
 }

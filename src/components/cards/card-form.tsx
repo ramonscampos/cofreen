@@ -3,14 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import { createCardAction, updateCardAction } from "@/app/actions/cards";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { createClient } from "@/lib/supabase/client";
-import type { Card } from "@/types";
+
+import type { ActionResult, Card } from "@/types";
 
 interface CardFormProps {
   onClose: () => void;
-  userId: string;
   initialData?: Card | null;
 }
 
@@ -25,16 +25,15 @@ const COLORS = [
   "#95a5a6",
 ];
 
-export function CardForm({ onClose, userId, initialData }: CardFormProps) {
-  const supabase = createClient();
-  const router = useRouter();
+export function CardForm({ onClose, initialData }: CardFormProps) {
+  const _router = useRouter();
   const [loading, setLoading] = useState(false);
 
-  const [bankName, setBankName] = useState(initialData?.bank_name || "");
+  const [bankName, setBankName] = useState(initialData?.bankName || "");
   const [description, setDescription] = useState(
     initialData?.description || "",
   );
-  const [dueDay, setDueDay] = useState(initialData?.due_day?.toString() || "1");
+  const [dueDay, setDueDay] = useState(initialData?.dueDay?.toString() || "1");
   const [color, setColor] = useState(initialData?.color || "#000000");
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -63,41 +62,38 @@ export function CardForm({ onClose, userId, initialData }: CardFormProps) {
     setLoading(true);
 
     const payload = {
-      bank_name: bankName,
+      bankName: bankName,
       description,
-      due_day: Number.parseInt(dueDay, 10),
+      dueDay: Number.parseInt(dueDay, 10),
       color,
-      user_id: userId,
     };
 
-    let error = null;
+    let result: ActionResult;
 
     if (initialData?.id) {
-      const { error: err } = await supabase
-        .from("cards")
-        .update(payload)
-        .eq("id", initialData.id);
-      error = err;
+      result = await updateCardAction(initialData.id, payload);
     } else {
-      const { error: err } = await supabase.from("cards").insert(payload);
-      error = err;
+      result = await createCardAction(payload);
     }
 
     setLoading(false);
 
-    if (!error) {
+    if (result.success) {
       toast.success("Cartão salvo com sucesso!");
-      router.refresh();
       onClose();
     } else {
-      toast.error("Erro ao salvar cartão");
+      toast.error(result.error || "Erro ao salvar cartão");
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
+        <label htmlFor="card-bank" className="sr-only">
+          Banco / Emissor
+        </label>
         <Input
+          id="card-bank"
           placeholder="Banco / Emissor"
           autoFocus
           value={bankName}
@@ -113,7 +109,11 @@ export function CardForm({ onClose, userId, initialData }: CardFormProps) {
       </div>
 
       <div>
+        <label htmlFor="card-description" className="sr-only">
+          Descrição (Opcional)
+        </label>
         <Input
+          id="card-description"
           placeholder="Descrição (Opcional)"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
@@ -123,10 +123,14 @@ export function CardForm({ onClose, userId, initialData }: CardFormProps) {
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <span className="text-xs text-zinc-500 ml-1 mb-1 block">
+          <label
+            htmlFor="card-due-day"
+            className="text-xs text-zinc-500 ml-1 mb-1 block"
+          >
             Dia de Vencimento
-          </span>
+          </label>
           <Input
+            id="card-due-day"
             type="number"
             min="1"
             max="31"

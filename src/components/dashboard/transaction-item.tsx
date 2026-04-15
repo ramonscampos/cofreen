@@ -172,7 +172,7 @@ export function TransactionItem({
                       viewBox="0 0 36 36"
                       className="h-full w-full -rotate-90"
                     >
-                      <title>Recorrente</title>
+                      <title>Progresso de Parcelas</title>
                       <path
                         className="text-zinc-700"
                         d="M18 2.0845
@@ -208,7 +208,7 @@ export function TransactionItem({
                 className="grid grid-cols-[4fr_2fr_2fr_1fr] gap-4 text-sm text-zinc-400 group hover:bg-zinc-800/50 rounded-md p-1 items-center transition-colors"
               >
                 <div className="flex items-center gap-2 pl-8 overflow-hidden">
-                  {sub.is_recurring && (
+                  {sub.isRecurring && (
                     <Repeat className="h-3 w-3 shrink-0 text-zinc-500" />
                   )}
                   <span className="truncate">{sub.description}</span>
@@ -218,59 +218,63 @@ export function TransactionItem({
                     style: "currency",
                     currency: "BRL",
                   }).format(
-                    sub.installment_total && sub.installment_total > 1
-                      ? sub.amount / sub.installment_total
-                      : sub.amount,
+                    sub.installmentTotal && sub.installmentTotal > 1
+                      ? Number(sub.amount) / sub.installmentTotal
+                      : Number(sub.amount),
                   )}
                 </span>
                 <span>
-                  {sub.installment_total && sub.installment_total > 1
-                    ? `${sub.installment_current}/${sub.installment_total}`
+                  {sub.installmentTotal && sub.installmentTotal > 1
+                    ? `${sub.installmentCurrent}/${sub.installmentTotal}`
                     : "-"}
                 </span>
-                
+
                 <div className="flex items-center justify-end gap-2 pr-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                        type="button"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onEdit({
-                                ...item, // Inherit base properties
-                                id: sub.id,
-                                description: sub.description,
-                                amount: sub.amount,
-                                kind: 'expense',
-                                isRecurring: sub.is_recurring || false,
-                                isCardTransaction: !sub.is_recurring, // If not recurring, it's a card transaction
-                                originalTemplateId: sub.is_recurring ? sub.id : undefined,
-                                installmentCurrent: sub.installment_current || undefined,
-                                installmentTotal: sub.installment_total || undefined,
-                                cardId: sub.card_id,
-                            } as DashboardItem);
-                        }}
-                        className="p-1 hover:bg-zinc-800 rounded transition-colors"
-                        title="Editar"
-                    >
-                        <Pencil className="h-3.5 w-3.5 text-zinc-500 hover:text-white" />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onDelete({
-                                ...item,
-                                id: sub.id,
-                                description: sub.description,
-                                isRecurring: sub.is_recurring || false,
-                                isCardTransaction: !sub.is_recurring,
-                                originalTemplateId: sub.is_recurring ? sub.id : undefined,
-                            } as DashboardItem);
-                        }}
-                        className="p-1 hover:bg-zinc-800 rounded transition-colors"
-                        title="Excluir"
-                    >
-                        <Trash2 className="h-3.5 w-3.5 text-zinc-500 hover:text-red-500" />
-                    </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit({
+                        ...item, // Inherit base properties
+                        id: sub.id,
+                        description: sub.description,
+                        amount: Number(sub.amount),
+                        kind: "expense",
+                        isRecurring: sub.isRecurring || false,
+                        isCardTransaction: !sub.isRecurring, // If not recurring, it's a card transaction
+                        originalTemplateId: sub.isRecurring
+                          ? sub.id
+                          : undefined,
+                        installmentCurrent: sub.installmentCurrent || undefined,
+                        installmentTotal: sub.installmentTotal || undefined,
+                        cardId: sub.cardId,
+                      } as DashboardItem);
+                    }}
+                    className="p-1 hover:bg-zinc-800 rounded transition-colors"
+                    title="Editar"
+                  >
+                    <Pencil className="h-3.5 w-3.5 text-zinc-500 hover:text-white" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete({
+                        ...item,
+                        id: sub.id,
+                        description: sub.description,
+                        isRecurring: sub.isRecurring || false,
+                        isCardTransaction: !sub.isRecurring,
+                        originalTemplateId: sub.isRecurring
+                          ? sub.id
+                          : undefined,
+                      } as DashboardItem);
+                    }}
+                    className="p-1 hover:bg-zinc-800 rounded transition-colors"
+                    title="Excluir"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-zinc-500 hover:text-red-500" />
+                  </button>
                 </div>
               </div>
             ))}

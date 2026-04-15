@@ -5,16 +5,14 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
-import { triggerTransactionUpdate } from "@/lib/events";
 import { MoneyInput } from "@/components/ui/money-input";
-import { createClient } from "@/lib/supabase/client";
-import type { DashboardItem } from "@/types";
+import { triggerTransactionUpdate } from "@/lib/events";
+import type { ActionResult, DashboardItem } from "@/types";
 
 interface EditBillModalProps {
   isOpen: boolean;
   onClose: () => void;
   item: DashboardItem | null;
-  userId: string;
   monthRef: string;
 }
 
@@ -22,10 +20,8 @@ export function EditBillModal({
   isOpen,
   onClose,
   item,
-  userId,
   monthRef,
 }: EditBillModalProps) {
-  const supabase = createClient();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [amount, setAmount] = useState("");
@@ -43,13 +39,16 @@ export function EditBillModal({
     setLoading(true);
     const numericAmount = parseFloat(amount.replace(",", "."));
 
-    if (isNaN(numericAmount)) {
+    if (Number.isNaN(numericAmount)) {
       toast.error("Valor inválido");
       setLoading(false);
       return;
     }
 
-    let error = null;
+    let result: ActionResult;
+    const { createTransactionAction, updateTransactionAction } = await import(
+      "@/app/actions/transactions"
+    );
 
     // Logic:
     // 1. If ID starts with 'virtual-', it creates a new Transaction (Manual Bill).
@@ -57,36 +56,36 @@ export function EditBillModal({
 
     if (item.id.toString().startsWith("virtual-card-")) {
       // CREATE
-      const { error: err } = await supabase.from("transactions").insert({
-        description: item.description, // Keep the card name as description
-        amount: numericAmount,
-        kind: "expense",
-        month_ref: monthRef,
-        paid: item.paid || false,
-        card_id: item.cardId,
-        user_id: userId,
-        is_recurring: false,
-      });
-      error = err;
+      result = await createTransactionAction(
+        {
+          description: item.description, // Keep the card name as description
+          amount: numericAmount.toString(),
+          kind: "expense",
+          monthRef: monthRef,
+          paid: item.paid || false,
+          cardId: item.cardId,
+          isRecurring: false,
+        },
+        false,
+      );
     } else {
       // UPDATE
-      const { error: err } = await supabase
-        .from("transactions")
-        .update({ amount: numericAmount }) // Only amount updates allowed
-        .eq("id", item.id);
-      error = err;
+      result = await updateTransactionAction(
+        item.id,
+        { amount: numericAmount.toString() },
+        false,
+      );
     }
 
     setLoading(false);
 
-    if (!error) {
+    if (result?.success) {
       toast.success("Fatura atualizada!");
       triggerTransactionUpdate();
       router.refresh();
       onClose();
     } else {
-      toast.error("Erro ao salvar fatura");
-      console.error(error);
+      toast.error(result?.error || "Erro ao salvar fatura");
     }
   };
 
@@ -99,10 +98,11 @@ export function EditBillModal({
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="text-xs text-gray-5 mb-1 block">
+          <label htmlFor="bill-amount" className="sr-only">
             Valor da Fatura
           </label>
           <MoneyInput
+            id="bill-amount"
             placeholder="Valor"
             value={amount}
             onValueChange={(value) => setAmount(value || "")}

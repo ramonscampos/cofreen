@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   formatMonthDisplay,
@@ -15,15 +15,16 @@ interface MonthSwitcherProps {
 
 export function MonthSwitcher({ monthRef }: MonthSwitcherProps) {
   const router = useRouter();
+  const pathname = usePathname();
 
   const handlePrev = () => {
     const prev = getPreviousMonthRef(monthRef);
-    router.push(`/?month=${prev}`);
+    router.push(`${pathname}?month=${prev}`);
   };
 
   const handleNext = () => {
     const next = getNextMonthRef(monthRef);
-    router.push(`/?month=${next}`);
+    router.push(`${pathname}?month=${next}`);
   };
 
   return (

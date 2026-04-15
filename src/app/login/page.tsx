@@ -1,18 +1,11 @@
 "use client";
 
 import Image from "next/image";
-import { createClient } from "@/lib/supabase/client";
+import { signIn } from "next-auth/react";
 
 export default function LoginPage() {
-  const supabase = createClient();
-
   const handleLogin = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${location.origin}/auth/callback`,
-      },
-    });
+    await signIn("google", { callbackUrl: "/dashboard" });
   };
 
   return (
@@ -22,10 +15,11 @@ export default function LoginPage() {
           <Image
             src="/logo-inverse.svg"
             alt="Logo"
-            width={48}
+            width={157}
             height={48}
             className="h-12 w-auto"
             priority
+            unoptimized
           />
         </div>
 

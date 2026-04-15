@@ -1,28 +1,22 @@
+import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { auth } from "@/auth";
+import { db } from "@/db";
+import { cards } from "@/db/schema";
 import { CardManager } from "./card-manager";
 
 export default async function CardsPage() {
-  const supabase = await createClient();
+  const session = await auth();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!session?.user) {
     return redirect("/login");
   }
 
-  const { data: cards } = await supabase
-    .from("cards")
-    .select("*")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: true });
+  const userCards = await db
+    .select()
+    .from(cards)
+    .where(eq(cards.userId, session.user.id))
+    .orderBy(cards.createdAt);
 
-  return (
-    <CardManager
-      user={user}
-      initialCards={cards || []}
-    />
-  );
+  return <CardManager initialCards={userCards} />;
 }

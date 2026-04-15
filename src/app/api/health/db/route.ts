@@ -1,5 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
+import { sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
+import { db } from "@/db";
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -9,28 +10,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return NextResponse.json(
-      { error: "missing supabase env" },
-      { status: 500 },
-    );
+  try {
+    await db.execute(sql`SELECT 1`);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ ok: false, dbError: message }, { status: 500 });
   }
-
-  const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false },
-  });
-
-  const { error } = await supabase.rpc("ping");
-
-  if (error) {
-    return NextResponse.json(
-      { ok: false, supabaseError: error.message },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json({ ok: true });
 }

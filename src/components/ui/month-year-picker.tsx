@@ -1,12 +1,15 @@
 "use client";
 
+import { addYears, format, isValid, parse } from "date-fns";
+import {
+  Calendar as CalendarIcon,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import * as React from "react";
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
-import { format, parse, isValid, addYears, subYears } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 interface MonthYearPickerProps {
   date?: Date;
@@ -24,9 +27,9 @@ export function MonthYearPicker({
   const [isOpen, setIsOpen] = React.useState(false);
   const [viewDate, setViewDate] = React.useState(date || new Date());
   const [inputValue, setInputValue] = React.useState(
-    date ? format(date, "MM/yyyy") : ""
+    date ? format(date, "MM/yyyy") : "",
   );
-  
+
   const popoverRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -38,7 +41,10 @@ export function MonthYearPicker({
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(event.target as Node)) {
+      if (
+        popoverRef.current &&
+        !popoverRef.current.contains(event.target as Node)
+      ) {
         setIsOpen(false);
       }
     };
@@ -54,10 +60,10 @@ export function MonthYearPicker({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, ""); // Remove non-digits
-    
+
     // Mask logic MM/AAAA
     if (value.length > 6) value = value.slice(0, 6);
-    
+
     if (value.length >= 3) {
       value = `${value.slice(0, 2)}/${value.slice(2)}`;
     }
@@ -66,9 +72,9 @@ export function MonthYearPicker({
 
     // Validate and update Valid Date
     if (value.length === 7) {
-      const [monthStr, yearStr] = value.split("/");
-      const month = parseInt(monthStr);
-      
+      const [monthStr, _yearStr] = value.split("/");
+      const month = parseInt(monthStr, 10);
+
       if (month >= 1 && month <= 12) {
         const parsedDate = parse(value, "MM/yyyy", new Date());
         if (isValid(parsedDate)) {
@@ -80,9 +86,18 @@ export function MonthYearPicker({
   };
 
   const months = [
-    "Jan", "Fev", "Mar", "Abr",
-    "Mai", "Jun", "Jul", "Ago",
-    "Set", "Out", "Nov", "Dez"
+    "Jan",
+    "Fev",
+    "Mar",
+    "Abr",
+    "Mai",
+    "Jun",
+    "Jul",
+    "Ago",
+    "Set",
+    "Out",
+    "Nov",
+    "Dez",
   ];
 
   const handleMonthSelect = (monthIndex: number) => {
@@ -92,7 +107,7 @@ export function MonthYearPicker({
   };
 
   const changeYear = (amount: number) => {
-    setViewDate(prev => addYears(prev, amount));
+    setViewDate((prev) => addYears(prev, amount));
   };
 
   return (
@@ -120,6 +135,7 @@ export function MonthYearPicker({
         <div className="absolute top-14 left-0 z-50 w-[280px] rounded-md border border-zinc-800 bg-zinc-900 shadow-xl p-4">
           <div className="flex items-center justify-between mb-4">
             <button
+              type="button"
               onClick={() => changeYear(-1)}
               className="p-1 text-gray-400 hover:text-white"
             >
@@ -129,6 +145,7 @@ export function MonthYearPicker({
               {viewDate.getFullYear()}
             </span>
             <button
+              type="button"
               onClick={() => changeYear(1)}
               className="p-1 text-gray-400 hover:text-white"
             >
@@ -138,8 +155,9 @@ export function MonthYearPicker({
 
           <div className="grid grid-cols-3 gap-2">
             {months.map((month, index) => {
-              const isSelected = date && 
-                date.getMonth() === index && 
+              const isSelected =
+                date &&
+                date.getMonth() === index &&
                 date.getFullYear() === viewDate.getFullYear();
 
               return (
@@ -148,9 +166,9 @@ export function MonthYearPicker({
                   onClick={() => handleMonthSelect(index)}
                   className={cn(
                     "text-sm py-2 rounded transition-colors",
-                    isSelected 
-                      ? "bg-green text-white font-medium" 
-                      : "text-gray-300 hover:bg-zinc-800 hover:text-white"
+                    isSelected
+                      ? "bg-green text-white font-medium"
+                      : "text-gray-300 hover:bg-zinc-800 hover:text-white",
                   )}
                   type="button"
                 >
@@ -159,8 +177,8 @@ export function MonthYearPicker({
               );
             })}
           </div>
-          
-          <button 
+
+          <button
             type="button"
             className="w-full mt-4 text-xs text-green hover:underline text-center"
             onClick={() => {

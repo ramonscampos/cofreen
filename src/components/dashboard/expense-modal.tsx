@@ -1,6 +1,6 @@
 "use client";
 
-import { addMonths, format, isValid, parse } from "date-fns";
+import { format, isValid, parse } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -11,28 +11,30 @@ import { MoneyInput } from "@/components/ui/money-input";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { Switch } from "@/components/ui/switch";
 import { triggerTransactionUpdate } from "@/lib/events";
-import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
-import type { Card } from "@/types";
+import type {
+  ActionResult,
+  Card,
+  CreateTemplatePayload,
+  CreateTransactionPayload,
+  DashboardItem,
+} from "@/types";
 
 interface ExpenseModalProps {
   isOpen: boolean;
   onClose: () => void;
-  userId: string;
-  monthRef: string; // Keep as required or optional depending on usage, matching updated calls
+  monthRef: string;
   userCards?: Card[];
-  initialData?: any;
+  initialData?: DashboardItem | null;
 }
 
 export function ExpenseModal({
   isOpen,
   onClose,
-  userId,
   monthRef,
   userCards = [],
   initialData,
 }: ExpenseModalProps) {
-  const supabase = createClient();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
@@ -59,30 +61,25 @@ export function ExpenseModal({
     if (isOpen) {
       if (initialData) {
         setDescription(initialData.description);
-        setAmount(
-          initialData.amount?.toString() ||
-            initialData.default_amount?.toString() ||
-            "",
-        );
-        setIsRecurring(
-          initialData.isRecurring || initialData.is_recurring || false,
-        );
+        setAmount(initialData.amount?.toString() || "");
 
-        if (initialData.day_of_month) {
-          setDay(initialData.day_of_month.toString());
+        setIsRecurring(initialData.isRecurring || false);
+
+        if (initialData.day) {
+          setDay(initialData.day.toString());
         } else {
           setDay(String(new Date().getDate()));
         }
 
-        const ref = initialData.month_ref || monthRef;
+        const ref = initialData.monthRef || monthRef;
         if (ref) {
           setSelectedDate(parse(ref, "yyyy-MM", new Date()));
         } else {
           setSelectedDate(new Date());
         }
 
-        if (initialData.card_id) {
-          setCardId(initialData.card_id);
+        if (initialData.cardId) {
+          setCardId(initialData.cardId);
         } else {
           setCardId(null);
         }
@@ -126,8 +123,8 @@ export function ExpenseModal({
 
     // --- INSTALLMENT LOGIC ---
     if (isInstallment) {
-      const count = Number.parseInt(installments);
-      const current = Number.parseInt(installmentCurrent);
+      const count = Number.parseInt(installments, 10);
+      const current = Number.parseInt(installmentCurrent, 10);
 
       if (Number.isNaN(count) || count < 2) {
         toast.error("Número de parcelas inválido (mínimo 2)");
@@ -147,22 +144,32 @@ export function ExpenseModal({
         return;
       }
 
+      const { createTemplateAction } = await import("@/app/actions/templates");
+      const { createTransactionAction } = await import(
+        "@/app/actions/transactions"
+      );
+
       // CASE A: Card Installments -> Generate SINGLE Master Record in card_transactions
       if (useCard && cardId) {
         const monthRefStr = format(selectedDate, "yyyy-MM");
 
-        const { error } = await supabase.from("card_transactions").insert({
-          description,
-          amount: numericAmount,
-          card_id: cardId,
-          user_id: userId,
-          month_ref: monthRefStr,
-          installment_current: current,
-          installment_total: count,
-        });
+        const result = await createTransactionAction(
+          {
+            description,
+            amount: numericAmount.toString(),
+            cardId: cardId,
+            monthRef: monthRefStr,
+            installmentCurrent: current,
+            installmentTotal: count,
+            kind: "expense",
+            paid: false,
+          } as CreateTransactionPayload,
 
-        if (error) {
-          console.error(error);
+          true,
+        ); // isCardTransaction = true
+
+        if (!result.success) {
+          console.error(result.error);
           toast.error("Erro ao configurar parcelamento no cartão");
         } else {
           toast.success("Parcelamento no cartão configurado!");
@@ -173,20 +180,19 @@ export function ExpenseModal({
       }
       // CASE B: Manual Installments -> Create SINGLE recurring_template
       else {
-        const { error } = await supabase.from("recurring_templates").insert({
+        const result = await createTemplateAction({
           description,
-          default_amount: numericAmount,
+          defaultAmount: numericAmount.toString(),
           kind: "expense",
-          user_id: userId,
-          day_of_month: selectedDate.getDate(),
-          month_ref: format(selectedDate, "yyyy-MM"),
-          installment_current: current,
-          installment_total: count,
-          is_active: true,
+          dayOfMonth: selectedDate.getDate(),
+          monthRef: format(selectedDate, "yyyy-MM"),
+          installmentCurrent: current,
+          installmentTotal: count,
+          isActive: true,
         });
 
-        if (error) {
-          console.error(error);
+        if (!result.success) {
+          console.error(result.error);
           toast.error("Erro ao configurar parcelamento");
         } else {
           toast.success("Parcelamento configurado!");
@@ -201,100 +207,100 @@ export function ExpenseModal({
     }
     // --- END INSTALLMENT LOGIC ---
 
-    let error = null;
+    let result: ActionResult;
     const monthRefStr = format(selectedDate, "yyyy-MM");
 
     const payload = {
       description,
-      [isRecurring ? "default_amount" : "amount"]: numericAmount, // recurring uses default_amount
+      [isRecurring ? "defaultAmount" : "amount"]: numericAmount.toString(), // recurring uses defaultAmount
       kind: "expense",
-      card_id: useCard ? cardId : null,
+      cardId: useCard ? cardId : null,
       ...(isRecurring
-        ? { day_of_month: Number.parseInt(day, 10) || 1 }
+        ? { dayOfMonth: Number.parseInt(day, 10) || 1 }
         : {
-            month_ref: monthRefStr,
+            monthRef: monthRefStr,
             paid: false,
-            is_recurring: false,
+            isRecurring: false,
           }),
-      user_id: userId,
-      ...(isRecurring ? { month_ref: monthRefStr, is_active: true } : {}),
+      ...(isRecurring ? { monthRef: monthRefStr, isActive: true } : {}),
       // Add transaction date only for non-recurring expenses
       ...(!isRecurring && {
-        transaction_date: `${monthRefStr}-${String(parseInt(day) || (monthRefStr === new Date().toISOString().substring(0, 7) ? new Date().getDate() : 1)).padStart(2, "0")}`,
+        transactionDate: `${monthRefStr}-${String(parseInt(day, 10) || (monthRefStr === new Date().toISOString().substring(0, 7) ? new Date().getDate() : 1)).padStart(2, "0")}`,
       }),
     };
 
+    const { createTemplateAction, updateTemplateAction } = await import(
+      "@/app/actions/templates"
+    );
+    const { createTransactionAction, updateTransactionAction } = await import(
+      "@/app/actions/transactions"
+    );
+
     if (initialData?.id) {
       // UPDATE
-      if (initialData.isRecurring || initialData.is_recurring) {
+      if (initialData.isRecurring) {
         // CASE 1: Update Recurring Template
-        const { error: err } = await supabase
-          .from("recurring_templates")
-          .update(payload)
-          .eq("id", initialData.id);
-        error = err;
+        result = await updateTemplateAction(
+          initialData.id,
+          payload as Partial<CreateTemplatePayload>,
+        );
       } else if (initialData.isCardTransaction) {
         // CASE 2: Update Card Transaction
-        // We filter payload for card_transactions table
-        const cardPayload = {
-          description,
-          amount: numericAmount,
-          card_id: useCard ? cardId : null,
-          month_ref: monthRefStr,
-          // installment fields?
-          // We can try to keep same installlment counts for now, or update them?
-          // If editing a single transaciton, these likely don't change by default unless explicit UI.
-        };
-
-        const { error: err } = await supabase
-          .from("card_transactions")
-          .update(cardPayload)
-          .eq("id", initialData.id);
-        error = err;
+        result = await updateTransactionAction(
+          initialData.id,
+          {
+            description,
+            amount: numericAmount.toString(),
+            cardId: useCard ? cardId : null,
+            monthRef: monthRefStr,
+            paid: initialData.paid,
+          } as Partial<CreateTransactionPayload>,
+          true,
+        );
       } else {
         // CASE 3: Update Existing Transaction
-        const { error: err } = await supabase
-          .from("transactions")
-          .update(payload)
-          .eq("id", initialData.id);
-        error = err;
+        result = await updateTransactionAction(
+          initialData.id,
+          payload as Partial<CreateTransactionPayload>,
+          false,
+        );
       }
     } else {
       // CREATE
       if (isRecurring) {
-        const { error: err } = await supabase
-          .from("recurring_templates")
-          .insert(payload);
-        error = err;
+        result = await createTemplateAction(
+          payload as unknown as CreateTemplatePayload,
+        );
       } else {
         // CASE 4: Create New Expense
         if (useCard && cardId) {
           // NEW RULE: Card Expenses go to `card_transactions`
-          const { error: err } = await supabase
-            .from("card_transactions")
-            .insert({
+          result = await createTransactionAction(
+            {
               description,
-              amount: numericAmount,
-              card_id: cardId,
-              user_id: userId,
-              month_ref: monthRefStr,
-              installment_current: 1, // Default to single installment?
-              installment_total: 1,
-            });
-          error = err;
+              amount: numericAmount.toString(),
+              cardId: cardId,
+              monthRef: monthRefStr,
+              installmentCurrent: 1,
+              installmentTotal: 1,
+              kind: "expense",
+              paid: false,
+            } as CreateTransactionPayload,
+            true,
+          );
         } else {
           // Normal Expense (Cash/Debit) -> `transactions`
-          const { error: err } = await supabase
-            .from("transactions")
-            .insert(payload);
-          error = err;
+          result = await createTransactionAction(
+            payload as unknown as CreateTransactionPayload,
+            false,
+          );
         }
       }
     }
 
     setLoading(false);
 
-    if (!error) {
+    if (result?.success) {
       toast.success(
         initialData ? "Despesa atualizada!" : "Despesa cadastrada!",
       );
@@ -302,8 +308,7 @@ export function ExpenseModal({
       router.refresh();
       onClose();
     } else {
-      toast.error("Erro ao salvar despesa");
-      console.error(error);
+      toast.error(result ? result.error : "Erro ao salvar despesa");
     }
   };
 
@@ -316,7 +321,11 @@ export function ExpenseModal({
     >
       <form onSubmit={handleSubmit} className="space-y-5">
         <div>
+          <label htmlFor="expense-description" className="sr-only">
+            Descrição
+          </label>
           <Input
+            id="expense-description"
             autoFocus
             placeholder="Descrição"
             value={description}
@@ -327,7 +336,11 @@ export function ExpenseModal({
         </div>
 
         <div>
+          <label htmlFor="expense-amount" className="sr-only">
+            Preço
+          </label>
           <MoneyInput
+            id="expense-amount"
             placeholder="Preço"
             value={amount}
             onValueChange={(value) => setAmount(value || "")}
@@ -338,8 +351,14 @@ export function ExpenseModal({
 
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-5 whitespace-nowrap">Dia:</span>
+            <label
+              htmlFor="expense-day"
+              className="text-sm text-gray-5 whitespace-nowrap"
+            >
+              Dia:
+            </label>
             <Input
+              id="expense-day"
               type="number"
               min="1"
               max="31"
@@ -385,15 +404,17 @@ export function ExpenseModal({
 
           <div className="flex items-center gap-2 w-full">
             <div className="flex items-center gap-2 flex-1">
-              <span
+              <label
+                htmlFor="expense-installment-current"
                 className={cn(
                   "text-sm text-gray-400",
                   !isInstallment && "opacity-50",
                 )}
               >
                 Atual:
-              </span>
+              </label>
               <Input
+                id="expense-installment-current"
                 type="number"
                 min="1"
                 max="99"
@@ -405,15 +426,17 @@ export function ExpenseModal({
             </div>
 
             <div className="flex items-center gap-2 flex-1">
-              <span
+              <label
+                htmlFor="expense-installments-total"
                 className={cn(
                   "text-sm text-gray-400",
                   !isInstallment && "opacity-50",
                 )}
               >
                 Total:
-              </span>
+              </label>
               <Input
+                id="expense-installments-total"
                 type="number"
                 min="2"
                 max="99"
@@ -483,7 +506,7 @@ export function ExpenseModal({
                     }}
                   >
                     <span>
-                      {card.bank_name}
+                      {card.bankName}
                       {card.description ? ` - ${card.description}` : ""}
                     </span>
                   </div>
