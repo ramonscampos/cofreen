@@ -11,6 +11,7 @@ export interface PluggyAccount {
   name: string;
   marketingName?: string | null;
   number?: string | null;
+  creditData?: { balanceDueDate?: string | null } | null;
 }
 
 export interface PluggyBill {
@@ -28,6 +29,7 @@ export interface PluggyTransaction {
   date: string;
   type: "DEBIT" | "CREDIT";
   category?: string | null;
+  categoryId?: string | null;
   creditCardMetadata?: {
     installmentNumber?: number | null;
     totalInstallments?: number | null;
@@ -35,6 +37,12 @@ export interface PluggyTransaction {
     billForecastDate?: string | null;
     purchaseDate?: string | null;
   } | null;
+}
+
+export interface PluggyCategory {
+  id: string;
+  description: string;
+  descriptionTranslated?: string | null;
 }
 
 export interface PluggyPage<T> {

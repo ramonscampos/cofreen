@@ -87,6 +87,8 @@ export interface MappedTransaction {
 
 interface MapTransactionContext {
   billsById: Map<string, PluggyBill>;
+  // Pluggy category id -> Portuguese name
+  categoryNames?: Map<string, string>;
   closingDay: number | null;
   dueDay: number;
 }
@@ -119,14 +121,25 @@ export function mapTransaction(
     installmentTotal: meta.totalInstallments ?? null,
     billExternalId: billId,
     purchaseDate: toDate(meta.purchaseDate ?? tx.date),
-    category: tx.category ?? null,
+    category:
+      (tx.categoryId && ctx.categoryNames?.get(tx.categoryId)) ??
+      tx.category ??
+      null,
   };
 }
 
 export function deriveCardDays(
   bills: PluggyBill[],
+  fallbackDueDate?: string | null,
 ): { dueDay: number; closingDay: number | null } | null {
-  if (bills.length === 0) return null;
+  if (bills.length === 0) {
+    return fallbackDueDate
+      ? {
+          dueDay: Number(toDate(fallbackDueDate).slice(8, 10)),
+          closingDay: null,
+        }
+      : null;
+  }
   const latest = [...bills].sort((a, b) =>
     b.dueDate.localeCompare(a.dueDate),
   )[0];
@@ -160,6 +173,8 @@ export function planStalePrune(fetchedIds: string[]): string[] | null {
 
 export interface ItemSyncResult {
   itemId: string;
+  // Shown to the user instead of the item id
+  label: string;
   ok: boolean;
   error?: string;
   consentExpiresAt?: string | null;
@@ -179,7 +194,7 @@ export function summarizeSync(results: ItemSyncResult[]): {
     ok: failures.length === 0,
     error:
       failures.length > 0
-        ? failures.map((f) => `${f.itemId}: ${f.error ?? "erro"}`).join("; ")
+        ? failures.map((f) => `${f.label}: ${f.error ?? "erro"}`).join("; ")
         : null,
     consentExpiresAt: expirations[0] ?? null,
   };

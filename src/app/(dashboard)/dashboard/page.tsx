@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { getTodayInSaoPaulo } from "@/lib/dates";
 import { getCurrentMonthRef } from "@/lib/finance-logic";
 import { getMonthData } from "@/lib/month-data";
 import { DashboardView } from "../dashboard-view";
@@ -28,5 +29,11 @@ export default async function DashboardPage({
 
   const monthData = await getMonthData(session.user.id, monthRef);
 
-  return <DashboardView initialMonthRef={monthRef} monthData={monthData} />;
+  return (
+    <DashboardView
+      initialMonthRef={monthRef}
+      monthData={monthData}
+      today={getTodayInSaoPaulo()}
+    />
+  );
 }

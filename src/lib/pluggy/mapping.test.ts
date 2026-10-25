@@ -127,7 +127,11 @@ describe("mapTransaction", () => {
     dueDate: "2026-11-23T00:00:00",
     totalAmount: 1000,
   };
-  const ctx = { billsById: new Map([["b1", bill]]), ...nubank };
+  const ctx = {
+    billsById: new Map([["b1", bill]]),
+    categoryNames: new Map([["08000000", "Compras"]]),
+    ...nubank,
+  };
 
   it("signs and keeps installments", () => {
     expect(
@@ -153,6 +157,15 @@ describe("mapTransaction", () => {
       purchaseDate: "2026-09-02",
       category: "Shopping",
     });
+  });
+
+  it("translates the category when Pluggy has a translation", () => {
+    expect(
+      mapTransaction(tx({ category: "Shopping", categoryId: "08000000" }), ctx),
+    ).toMatchObject({ category: "Compras" });
+    expect(
+      mapTransaction(tx({ category: "Travel", categoryId: "99999999" }), ctx),
+    ).toMatchObject({ category: "Travel" });
   });
 
   it("makes credits negative", () => {
@@ -233,14 +246,27 @@ describe("deriveCardDays", () => {
   it("returns null without bills", () => {
     expect(deriveCardDays([])).toBeNull();
   });
+
+  it("falls back to the account due date without bills", () => {
+    expect(deriveCardDays([], "2026-10-23")).toEqual({
+      dueDay: 23,
+      closingDay: null,
+    });
+  });
 });
 
 describe("summarizeSync", () => {
   it("keeps going on partial failure", () => {
     const result = summarizeSync([
-      { itemId: "a", ok: true, consentExpiresAt: "2027-09-01T00:00:00Z" },
       {
-        itemId: "b",
+        itemId: "a",
+        label: "Conexão 1",
+        ok: true,
+        consentExpiresAt: "2027-09-01T00:00:00Z",
+      },
+      {
+        itemId: "b-secret-id",
+        label: "Conexão 2",
         ok: false,
         error: "USER_AUTHORIZATION_EXPIRED",
         consentExpiresAt: "2027-03-01T00:00:00Z",
@@ -248,12 +274,16 @@ describe("summarizeSync", () => {
     ]);
     expect(result.ok).toBe(false);
     expect(result.error).toContain("USER_AUTHORIZATION_EXPIRED");
+    expect(result.error).toContain("Conexão 2");
+    expect(result.error).not.toContain("b-secret-id");
     expect(result.consentExpiresAt).toBe("2027-03-01T00:00:00Z");
   });
 
   it("is ok when every item is ok", () => {
     expect(
-      summarizeSync([{ itemId: "a", ok: true, consentExpiresAt: null }]),
+      summarizeSync([
+        { itemId: "a", label: "Conexão 1", ok: true, consentExpiresAt: null },
+      ]),
     ).toEqual({ ok: true, error: null, consentExpiresAt: null });
   });
 });

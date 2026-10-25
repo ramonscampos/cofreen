@@ -217,7 +217,9 @@ export function buildCardBillView({
     categories: [],
   };
 
-  const bill = cardBills.find((b) => b.monthRef === monthRef);
+  const bill = cardBills
+    .filter((b) => b.monthRef === monthRef)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
   const monthPurchases = cardTransactions
     .filter((tx) => tx.monthRef === monthRef)
     .map((tx) => toPurchase(tx, false))

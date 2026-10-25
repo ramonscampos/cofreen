@@ -91,6 +91,30 @@ describe("real bills", () => {
     expect(view.status).toBe("closed");
   });
 
+  it("picks the most recently updated bill when two share a due month", () => {
+    const view = buildCardBillView({
+      card,
+      bills: [
+        bill({
+          monthRef: "2026-10",
+          externalId: "old",
+          totalAmount: "900",
+          updatedAt: "2026-10-01T00:00:00Z",
+        }),
+        bill({
+          monthRef: "2026-10",
+          externalId: "new",
+          totalAmount: "1000",
+          updatedAt: "2026-10-20T00:00:00Z",
+        }),
+      ],
+      transactions: [],
+      monthRef: "2026-10",
+      today,
+    });
+    expect(view.amount).toBe(1000);
+  });
+
   it("partial payment", () => {
     const view = buildCardBillView({
       card,

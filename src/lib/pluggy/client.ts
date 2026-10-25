@@ -1,7 +1,9 @@
+import "server-only";
 import { type CursorPage, collectCursorPages } from "./pagination";
 import type {
   PluggyAccount,
   PluggyBill,
+  PluggyCategory,
   PluggyItem,
   PluggyPage,
   PluggyTransaction,
@@ -26,6 +28,7 @@ export interface PluggyClient {
     accountId: string,
     from: string,
   ): Promise<PluggyTransaction[]>;
+  listCategoryNames(): Promise<Map<string, string>>;
 }
 
 async function request<T>(
@@ -85,6 +88,14 @@ export async function createPluggyClient(): Promise<PluggyClient> {
         .results,
     listBills: (accountId) =>
       getAllPages<PluggyBill>(`/bills?accountId=${accountId}`),
+    listCategoryNames: async () => {
+      const categories = await getAllPages<PluggyCategory>("/categories");
+      return new Map(
+        categories.flatMap((c) =>
+          c.descriptionTranslated ? [[c.id, c.descriptionTranslated]] : [],
+        ),
+      );
+    },
     listTransactions: (accountId, from) =>
       collectCursorPages(
         (query) =>

@@ -1,3 +1,4 @@
+import "server-only";
 import { format, startOfMonth, subMonths } from "date-fns";
 import { and, eq, gte, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
@@ -30,7 +31,7 @@ async function resolveUserId(): Promise<string> {
   const [user] = await db
     .select({ id: users.id })
     .from(users)
-    .where(eq(users.email, email));
+    .where(eq(sql`lower(${users.email})`, email.toLowerCase()));
   if (!user) throw new Error("Usuário do ALLOWED_EMAIL não encontrado");
   return user.id;
 }
@@ -41,9 +42,10 @@ async function syncAccount(
   itemId: string,
   account: PluggyAccount,
   from: string,
+  categoryNames: Map<string, string>,
 ) {
   const bills = await client.listBills(account.id);
-  const days = deriveCardDays(bills);
+  const days = deriveCardDays(bills, account.creditData?.balanceDueDate);
 
   const [card] = await db
     .insert(cards)
@@ -85,12 +87,25 @@ async function syncAccount(
       });
   }
 
+  const keepBillIds = planStalePrune(bills.map((bill) => bill.id));
+  if (keepBillIds) {
+    await db
+      .delete(cardBills)
+      .where(
+        and(
+          eq(cardBills.cardId, card.id),
+          notInArray(cardBills.externalId, keepBillIds),
+        ),
+      );
+  }
+
   const billsById = new Map(bills.map((bill) => [bill.id, bill]));
   const transactions = await client.listTransactions(account.id, from);
   const mapped = transactions
     .map((tx) =>
       mapTransaction(tx, {
         billsById,
+        categoryNames,
         closingDay: card.closingDay,
         dueDay: card.dueDay,
       }),
@@ -144,6 +159,7 @@ export async function syncPluggyCards(): Promise<{
   try {
     const userId = await resolveUserId();
     const client = await createPluggyClient();
+    const categoryNames = await client.listCategoryNames();
     const itemIds = (process.env.PLUGGY_ITEM_IDS ?? "")
       .split(",")
       .map((id) => id.trim())
@@ -155,13 +171,15 @@ export async function syncPluggyCards(): Promise<{
       "yyyy-MM-dd",
     );
 
-    for (const itemId of itemIds) {
+    for (const [index, itemId] of itemIds.entries()) {
+      const label = `Conexão ${index + 1} de ${itemIds.length}`;
       try {
         const item = await client.getItem(itemId);
         const outcome = evaluateItem(item, new Date());
         if (!outcome.ok) {
           results.push({
             itemId,
+            label,
             ok: false,
             error: outcome.error,
             consentExpiresAt: item.consentExpiresAt ?? null,
@@ -170,16 +188,25 @@ export async function syncPluggyCards(): Promise<{
         }
         const accounts = await client.listAccounts(itemId);
         for (const account of accounts.filter((a) => a.type === "CREDIT")) {
-          await syncAccount(client, userId, itemId, account, from);
+          await syncAccount(
+            client,
+            userId,
+            itemId,
+            account,
+            from,
+            categoryNames,
+          );
         }
         results.push({
           itemId,
+          label,
           ok: true,
           consentExpiresAt: item.consentExpiresAt ?? null,
         });
       } catch (error) {
         results.push({
           itemId,
+          label,
           ok: false,
           error: error instanceof Error ? error.message : String(error),
         });
@@ -188,6 +215,7 @@ export async function syncPluggyCards(): Promise<{
   } catch (error) {
     results.push({
       itemId: "config",
+      label: "Configuração",
       ok: false,
       error: error instanceof Error ? error.message : String(error),
     });

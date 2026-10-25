@@ -1,5 +1,6 @@
 "use client";
 
+import { parse } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -15,6 +16,8 @@ import type { ActionResult, DashboardItem, Kind } from "@/types";
 interface DashboardViewProps {
   initialMonthRef: string;
   monthData: MonthData;
+  // yyyy-MM-dd computed on the server so both renders agree
+  today: string;
 }
 
 import { ChevronRight, Layers, List } from "lucide-react";
@@ -26,6 +29,7 @@ import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 export function DashboardView({
   initialMonthRef,
   monthData,
+  today,
 }: DashboardViewProps) {
   const router = useRouter();
 
@@ -39,8 +43,13 @@ export function DashboardView({
   const [viewMode, setViewMode] = useState<"mixed" | "grouped">("mixed");
 
   const { items, cardBills } = useMemo(
-    () => buildMonthView(monthData, initialMonthRef, new Date()),
-    [monthData, initialMonthRef],
+    () =>
+      buildMonthView(
+        monthData,
+        initialMonthRef,
+        parse(today, "yyyy-MM-dd", new Date()),
+      ),
+    [monthData, initialMonthRef, today],
   );
 
   const openNewModal = (kind: Kind) => {
