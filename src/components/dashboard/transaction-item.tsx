@@ -248,6 +248,8 @@ export function TransactionItem({
                         installmentCurrent: sub.installmentCurrent || undefined,
                         installmentTotal: sub.installmentTotal || undefined,
                         cardId: sub.cardId,
+                        // Keep the plan's start month so saving doesn't shift it
+                        monthRef: sub.monthRef,
                       } as DashboardItem);
                     }}
                     className="p-1 hover:bg-zinc-800 rounded transition-colors"

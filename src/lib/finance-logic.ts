@@ -42,6 +42,40 @@ export function formatMonthDisplay(monthRef: string): string {
   return date.toLocaleString("pt-BR", { month: "long", year: "numeric" });
 }
 
+export function getMonthDiff(fromMonthRef: string, toMonthRef: string): number {
+  const [fromYear, fromMonth] = fromMonthRef.split("-").map(Number);
+  const [toYear, toMonth] = toMonthRef.split("-").map(Number);
+  return (toYear - fromYear) * 12 + (toMonth - fromMonth);
+}
+
+// Installment amounts are stored as the purchase total
+export function getMonthlyAmount(
+  amount: number,
+  installmentTotal?: number | null,
+): number {
+  return installmentTotal && installmentTotal > 1
+    ? amount / installmentTotal
+    : amount;
+}
+
+// Projects a card transaction onto a month. Installment plans are stored once,
+// in their start month, so the installment number is derived from the offset.
+function getCardTransactionForMonth(
+  cardTransaction: CardTransaction,
+  monthRef: string,
+): CardTransaction | null {
+  const total = cardTransaction.installmentTotal;
+  if (!total || total <= 1) {
+    return cardTransaction.monthRef === monthRef ? cardTransaction : null;
+  }
+
+  const diffMonths = getMonthDiff(cardTransaction.monthRef, monthRef);
+  const current = (cardTransaction.installmentCurrent || 1) + diffMonths;
+  if (diffMonths < 0 || current > total) return null;
+
+  return { ...cardTransaction, installmentCurrent: current };
+}
+
 export function mergeTransactionsAndTemplates(
   transactions: Transaction[],
   templates: RecurringTemplate[],
@@ -87,12 +121,7 @@ export function mergeTransactionsAndTemplates(
     let isInstallmentPlan = false;
 
     if (template.installmentTotal && template.installmentTotal > 1) {
-      const [viewYear, viewMonth] = monthRef.split("-").map(Number);
-      const [startYear, startMonth] = (template.monthRef || monthRef)
-        .split("-")
-        .map(Number);
-
-      const diffMonths = (viewYear - startYear) * 12 + (viewMonth - startMonth);
+      const diffMonths = getMonthDiff(template.monthRef || monthRef, monthRef);
       const current = (template.installmentCurrent || 1) + diffMonths;
 
       if (current > template.installmentTotal) return; // Finished
@@ -134,18 +163,17 @@ export function mergeTransactionsAndTemplates(
   // 3. Process Cards (Virtual vs Manual Bills)
   cards.forEach((card) => {
     // Find the sub-transactions for this card/month
-    const subTransactions = cardTransactions.filter(
-      (ct) => ct.cardId === card.id && ct.monthRef === monthRef,
-    );
+    const subTransactions = cardTransactions
+      .filter((ct) => ct.cardId === card.id)
+      .map((ct) => getCardTransactionForMonth(ct, monthRef))
+      .filter((ct): ct is CardTransaction => ct !== null);
 
     // Calculate sum of real transactions
-    const subSum = subTransactions.reduce((acc, curr) => {
-      const val =
-        curr.installmentTotal && curr.installmentTotal > 1
-          ? Number(curr.amount) / curr.installmentTotal
-          : Number(curr.amount);
-      return acc + val;
-    }, 0);
+    const subSum = subTransactions.reduce(
+      (acc, curr) =>
+        acc + getMonthlyAmount(Number(curr.amount), curr.installmentTotal),
+      0,
+    );
 
     // Find recurring templates for this card
     const cardRecurringItems = recurringCardTemplates.filter(
@@ -169,9 +197,11 @@ export function mergeTransactionsAndTemplates(
     );
 
     // Calculate sum of recurring items
-    const recurringSum = mappedRecurring.reduce((acc, curr) => {
-      return acc + Number(curr.amount);
-    }, 0);
+    const recurringSum = mappedRecurring.reduce(
+      (acc, curr) =>
+        acc + getMonthlyAmount(Number(curr.amount), curr.installmentTotal),
+      0,
+    );
 
     const finalSum = subSum + recurringSum;
     const finalSubTransactions = [...subTransactions, ...mappedRecurring];
@@ -231,12 +261,7 @@ export function calculateTotals(items: DashboardItem[]): MonthTotals {
       // If it's a regular expense -> Added.
       // Templates are also added if merged.
 
-      const val =
-        item.installmentTotal && item.installmentTotal > 1
-          ? item.amount / item.installmentTotal
-          : item.amount;
-
-      expense += val;
+      expense += getMonthlyAmount(item.amount, item.installmentTotal);
     }
   });
 

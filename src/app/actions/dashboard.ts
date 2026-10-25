@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, gt, lte, or } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/db";
 import {
@@ -60,9 +60,16 @@ export async function getDashboardSummaryAction(
         .where(
           and(
             eq(cardTransactions.userId, session.user.id),
-            eq(cardTransactions.monthRef, monthRef),
+            // Installment plans are stored once, in their start month
+            or(
+              eq(cardTransactions.monthRef, monthRef),
+              and(
+                gt(cardTransactions.installmentTotal, 1),
+                lte(cardTransactions.monthRef, monthRef),
+              ),
+            ),
           ),
-        ), // Note: original had OR with installment_total.gt.1, but keeping simple for now
+        ),
     ]);
 
     return {
