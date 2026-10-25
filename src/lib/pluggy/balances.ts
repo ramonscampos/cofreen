@@ -16,20 +16,21 @@ const ACCOUNT_SUBTYPE_NAME: Record<string, string> = {
 };
 
 // Meu Pluggy items don't name the bank, so read it off the bank account name
+export function detectBank(bankAccountNames: string[]): string {
+  const names = bankAccountNames.join(" ");
+  if (/nu pagamentos|nubank/i.test(names)) return "Nubank";
+  if (/bradesco/i.test(names)) return "Bradesco";
+  return bankAccountNames[0] ?? "Banco";
+}
+
 export function institutionLabel(
   bankAccountNames: string[],
   taxNumber: string | null | undefined,
 ): string {
-  const names = bankAccountNames.join(" ");
-  const bank = /nu pagamentos|nubank/i.test(names)
-    ? "Nubank"
-    : /bradesco/i.test(names)
-      ? "Bradesco"
-      : (bankAccountNames[0] ?? "Banco");
   const digits = (taxNumber ?? "").replace(/\D/g, "");
   const holder =
     digits.length === 14 ? " PJ" : digits.length === 11 ? " PF" : "";
-  return `${bank}${holder}`;
+  return `${detectBank(bankAccountNames)}${holder}`;
 }
 
 export function mapBankAccounts(
@@ -53,7 +54,8 @@ export function mapInvestments(
 ): MappedBalance[] {
   return investments
     .filter(
-      (investment) => investment.status === "ACTIVE" && investment.balance > 0,
+      (investment) =>
+        investment.status !== "TOTAL_WITHDRAWAL" && investment.balance > 0,
     )
     .map((investment) => ({
       externalId: investment.id,

@@ -1,4 +1,5 @@
 import { addMonths, format, parse } from "date-fns";
+import { detectBank } from "./balances";
 import type { PluggyBill, PluggyItem, PluggyTransaction } from "./types";
 
 const toDate = (value: string) => value.slice(0, 10);
@@ -178,9 +179,7 @@ export type OpenBillSource = "balance" | "transactions";
 export function detectOpenBillSource(
   bankAccountNames: string[],
 ): OpenBillSource {
-  return bankAccountNames.some((name) => /nu pagamentos|nubank/i.test(name))
-    ? "balance"
-    : "transactions";
+  return detectBank(bankAccountNames) === "Nubank" ? "balance" : "transactions";
 }
 
 export interface ItemSyncResult {

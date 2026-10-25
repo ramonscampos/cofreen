@@ -22,7 +22,11 @@ export function CardBillsSection({ bills, syncStatus }: CardBillsSectionProps) {
       ) : (
         <div className="grid gap-2">
           {bills.map((bill) => (
-            <CardBillItem key={bill.card.id} bill={bill} />
+            // Keyed by month so a picked category doesn't leak into another bill
+            <CardBillItem
+              key={`${bill.card.id}-${bill.monthRef}`}
+              bill={bill}
+            />
           ))}
         </div>
       )}

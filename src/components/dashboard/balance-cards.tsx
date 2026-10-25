@@ -1,3 +1,5 @@
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { Landmark, PiggyBank } from "lucide-react";
 import type { ReactNode } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +17,7 @@ interface BalanceCardProps {
   total: number;
   byInstitution: { institution: string; amount: number }[];
   emptyText: string;
+  updatedLabel: string | null;
 }
 
 function BalanceCard({
@@ -23,6 +26,7 @@ function BalanceCard({
   total,
   byInstitution,
   emptyText,
+  updatedLabel,
 }: BalanceCardProps) {
   return (
     <Card className="bg-[#323238] border-none text-white">
@@ -50,6 +54,9 @@ function BalanceCard({
             ))}
           </ul>
         )}
+        {updatedLabel && (
+          <p className="text-xs text-zinc-500">{updatedLabel}</p>
+        )}
       </CardContent>
     </Card>
   );
@@ -58,6 +65,13 @@ function BalanceCard({
 // Balances are today's, independent of the selected month
 export function BalanceCards({ balances }: BalanceCardsProps) {
   const { accounts, investments } = summarizeBalances(balances);
+  const lastUpdate = balances
+    .map((b) => b.updatedAt)
+    .sort()
+    .at(-1);
+  const updatedLabel = lastUpdate
+    ? `Atualizado em ${format(parseISO(lastUpdate), "dd/MM 'às' HH:mm", { locale: ptBR })}`
+    : null;
 
   return (
     <div className="grid gap-8 md:grid-cols-2">
@@ -67,6 +81,7 @@ export function BalanceCards({ balances }: BalanceCardsProps) {
         total={accounts.total}
         byInstitution={accounts.byInstitution}
         emptyText="Nenhum saldo em conta."
+        updatedLabel={updatedLabel}
       />
       <BalanceCard
         title="Investido"
@@ -74,6 +89,7 @@ export function BalanceCards({ balances }: BalanceCardsProps) {
         total={investments.total}
         byInstitution={investments.byInstitution}
         emptyText="Nenhum investimento ativo."
+        updatedLabel={updatedLabel}
       />
     </div>
   );

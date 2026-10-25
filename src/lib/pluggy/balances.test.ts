@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  detectBank,
   institutionLabel,
   mapBankAccounts,
   mapInvestments,
@@ -86,6 +87,33 @@ describe("mapInvestments", () => {
         amount: "505.56",
       },
     ]);
+  });
+});
+
+describe("mapInvestments status", () => {
+  it("keeps investments without a status when they hold money", () => {
+    expect(
+      mapInvestments(
+        [
+          {
+            id: "i3",
+            name: "Caixinha",
+            type: "FIXED_INCOME",
+            balance: 100,
+            status: null,
+          },
+        ],
+        "Nubank PF",
+      ).map((row) => row.externalId),
+    ).toEqual(["i3"]);
+  });
+});
+
+describe("detectBank", () => {
+  it("recognizes the bank from its account names", () => {
+    expect(detectBank(["Nu Pagamentos S.A."])).toBe("Nubank");
+    expect(detectBank(["Banco Bradesco"])).toBe("Bradesco");
+    expect(detectBank(["Banco Inter"])).toBe("Banco Inter");
   });
 });
 

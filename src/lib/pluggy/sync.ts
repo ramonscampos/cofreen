@@ -29,6 +29,13 @@ const DEFAULT_CARD_COLOR = "#8257e5";
 const HISTORY_MONTHS = 6;
 const UPSERT_CHUNK = 200;
 
+function configuredItems(): string[] {
+  return (process.env.PLUGGY_ITEM_IDS ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
 async function resolveUserId(): Promise<string> {
   const email = process.env.ALLOWED_EMAIL;
   if (!email) throw new Error("ALLOWED_EMAIL não configurado");
@@ -45,9 +52,10 @@ async function syncBalances(
   userId: string,
   itemId: string,
   accounts: PluggyAccount[],
+  bankNames: string[],
 ) {
   const institution = institutionLabel(
-    accounts.filter((a) => a.type === "BANK").map((a) => a.name),
+    bankNames,
     accounts.find((a) => a.taxNumber)?.taxNumber,
   );
   const rows = [
@@ -61,6 +69,8 @@ async function syncBalances(
       .onConflictDoUpdate({
         target: balances.externalId,
         set: {
+          pluggyItemId: sql`excluded.pluggy_item_id`,
+          kind: sql`excluded.kind`,
           institution: sql`excluded.institution`,
           name: sql`excluded.name`,
           amount: sql`excluded.amount`,
@@ -69,18 +79,19 @@ async function syncBalances(
       });
   }
 
-  // Withdrawn investments and closed accounts drop out of the item
-  const keepIds = planStalePrune(rows.map((row) => row.externalId));
-  if (keepIds) {
-    await db
-      .delete(balances)
-      .where(
-        and(
-          eq(balances.pluggyItemId, itemId),
-          notInArray(balances.externalId, keepIds),
-        ),
-      );
-  }
+  // Withdrawn investments and closed accounts drop out of the item. Both
+  // lists came back fine, so an empty result really means nothing is left.
+  const keepIds = rows.map((row) => row.externalId);
+  await db
+    .delete(balances)
+    .where(
+      and(
+        eq(balances.pluggyItemId, itemId),
+        keepIds.length > 0
+          ? notInArray(balances.externalId, keepIds)
+          : undefined,
+      ),
+    );
 }
 
 async function syncAccount(
@@ -212,10 +223,7 @@ export async function syncPluggyCards(): Promise<{
     const userId = await resolveUserId();
     const client = await createPluggyClient();
     const categoryNames = await client.listCategoryNames();
-    const itemIds = (process.env.PLUGGY_ITEM_IDS ?? "")
-      .split(",")
-      .map((id) => id.trim())
-      .filter(Boolean);
+    const itemIds = configuredItems();
     if (itemIds.length === 0) throw new Error("PLUGGY_ITEM_IDS vazio");
 
     const from = format(
@@ -239,10 +247,10 @@ export async function syncPluggyCards(): Promise<{
           continue;
         }
         const accounts = await client.listAccounts(itemId);
-        await syncBalances(client, userId, itemId, accounts);
-        const openBillSource = detectOpenBillSource(
-          accounts.filter((a) => a.type === "BANK").map((a) => a.name),
-        );
+        const bankNames = accounts
+          .filter((a) => a.type === "BANK")
+          .map((a) => a.name);
+        const openBillSource = detectOpenBillSource(bankNames);
         for (const account of accounts.filter((a) => a.type === "CREDIT")) {
           await syncAccount(
             client,
@@ -253,6 +261,17 @@ export async function syncPluggyCards(): Promise<{
             categoryNames,
             openBillSource,
           );
+        }
+        // Balances are secondary: a failure here must not hide synced cards
+        try {
+          await syncBalances(client, userId, itemId, accounts, bankNames);
+        } catch (error) {
+          results.push({
+            itemId,
+            label: `${label} (saldos)`,
+            ok: false,
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
         results.push({
           itemId,
@@ -276,6 +295,15 @@ export async function syncPluggyCards(): Promise<{
       ok: false,
       error: error instanceof Error ? error.message : String(error),
     });
+  }
+
+  // Balances of connections that were removed or replaced stop counting
+  const syncedItemIds = results.filter((r) => r.ok).map((r) => r.itemId);
+  const configuredItemIds = configuredItems();
+  if (configuredItemIds.length > 0 && syncedItemIds.length > 0) {
+    await db
+      .delete(balances)
+      .where(notInArray(balances.pluggyItemId, configuredItemIds));
   }
 
   const summary = summarizeSync(results);
