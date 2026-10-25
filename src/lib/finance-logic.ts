@@ -1,7 +1,5 @@
 import { differenceInCalendarMonths, parse } from "date-fns";
 import type {
-  Card,
-  CardTransaction,
   CreateTransactionPayload,
   DashboardItem,
   RecurringTemplate,
@@ -62,38 +60,18 @@ export function getMonthlyAmount(
     : amount;
 }
 
-// Projects a card transaction onto a month. Installment plans are stored once,
-// in their start month, so the installment number is derived from the offset.
-function getCardTransactionForMonth(
-  cardTransaction: CardTransaction,
-  monthRef: string,
-): CardTransaction | null {
-  const total = cardTransaction.installmentTotal;
-  if (!total || total <= 1) {
-    return cardTransaction.monthRef === monthRef ? cardTransaction : null;
-  }
-
-  const diffMonths = getMonthDiff(cardTransaction.monthRef, monthRef);
-  const current = (cardTransaction.installmentCurrent || 1) + diffMonths;
-  if (diffMonths < 0 || current > total) return null;
-
-  return { ...cardTransaction, installmentCurrent: current };
-}
-
+// Card spending comes from synced card bills (see lib/cards). Legacy rows tied
+// to a card are ignored so they never double count against a bill.
 export function mergeTransactionsAndTemplates(
   transactions: Transaction[],
   templates: RecurringTemplate[],
   monthRef: string,
-  cards: Card[] = [],
-  cardTransactions: CardTransaction[] = [],
 ): DashboardItem[] {
   const items: DashboardItem[] = [];
-
-  // Store recurring templates that are linked to cards here, to merge later
-  const recurringCardTemplates: DashboardItem[] = [];
+  const ownTransactions = transactions.filter((t) => !t.cardId);
 
   // 1. Add all real transactions
-  transactions.forEach((t) => {
+  ownTransactions.forEach((t) => {
     items.push({
       id: t.id,
       kind: t.kind,
@@ -108,13 +86,12 @@ export function mergeTransactionsAndTemplates(
         : new Date(t.createdAt).getDate(),
       installmentCurrent: t.installmentCurrent ?? undefined,
       installmentTotal: t.installmentTotal ?? undefined,
-      cardId: t.cardId ?? undefined,
     });
   });
 
   // 2. Process Templates (Manual Installments or Recurring)
   templates.forEach((template) => {
-    if (template.isActive === false) return;
+    if (template.isActive === false || template.cardId) return;
 
     // Common Rule: Respect start month
     if (template.monthRef && template.monthRef > monthRef) return;
@@ -136,12 +113,12 @@ export function mergeTransactionsAndTemplates(
     }
 
     // Check if there is already a transaction for this template in this month (Manual override)
-    const hasTransaction = transactions.some(
+    const hasTransaction = ownTransactions.some(
       (t) => t.templateId === template.id && t.monthRef === monthRef,
     );
 
     if (!hasTransaction) {
-      const newItem = {
+      items.push({
         id: template.id,
         kind: template.kind,
         description: template.description,
@@ -150,94 +127,8 @@ export function mergeTransactionsAndTemplates(
         isRecurring: !isInstallmentPlan, // If installment, distinct icon
         originalTemplateId: template.id,
         day: template.dayOfMonth,
-        installmentCurrent: effectiveCurrent ?? undefined,
-        installmentTotal: effectiveTotal ?? undefined,
-        cardId: template.cardId ?? undefined, // Ensure cardId is passed
-      };
-
-      // If this template is linked to a card, store it for later grouping
-      if (template.cardId) {
-        recurringCardTemplates.push(newItem);
-      } else {
-        items.push(newItem);
-      }
-    }
-  });
-
-  // 3. Process Cards (Virtual vs Manual Bills)
-  cards.forEach((card) => {
-    // Find the sub-transactions for this card/month
-    const subTransactions = cardTransactions
-      .filter((ct) => ct.cardId === card.id)
-      .map((ct) => getCardTransactionForMonth(ct, monthRef))
-      .filter((ct): ct is CardTransaction => ct !== null);
-
-    // Calculate sum of real transactions
-    const subSum = subTransactions.reduce(
-      (acc, curr) =>
-        acc + getMonthlyAmount(Number(curr.amount), curr.installmentTotal),
-      0,
-    );
-
-    // Find recurring templates for this card
-    const cardRecurringItems = recurringCardTemplates.filter(
-      (item) => item.cardId === card.id,
-    );
-
-    // Merge them into the subTransactions logic for display
-    const mappedRecurring: CardTransaction[] = cardRecurringItems.map(
-      (item) => ({
-        id: item.id,
-        userId: "",
-        cardId: card.id,
-        monthRef: monthRef,
-        description: item.description,
-        amount: item.amount.toString(),
-        installmentTotal: item.installmentTotal ?? null,
-        installmentCurrent: item.installmentCurrent ?? null,
-        externalId: null,
-        billExternalId: null,
-        purchaseDate: null,
-        category: null,
-        createdAt: new Date().toISOString(),
-        isRecurring: item.isRecurring,
-      }),
-    );
-
-    // Calculate sum of recurring items
-    const recurringSum = mappedRecurring.reduce(
-      (acc, curr) =>
-        acc + getMonthlyAmount(Number(curr.amount), curr.installmentTotal),
-      0,
-    );
-
-    const finalSum = subSum + recurringSum;
-    const finalSubTransactions = [...subTransactions, ...mappedRecurring];
-
-    // Check if there is already a MANUAL transaction (bill) for this card
-    const manualBillIndex = items.findIndex(
-      (item) => item.cardId === card.id && item.transactionId,
-    );
-
-    if (manualBillIndex >= 0) {
-      // If manual bill exists, we attach the full list of transactions (including recurring)
-      // so they can be seen in expanded view.
-      // We do NOT update the amount, as manual bill amount is user-defined.
-      items[manualBillIndex].cardTransactions = finalSubTransactions;
-      items[manualBillIndex].cardColor = card.color;
-    } else {
-      // Virtual Bill: Sum everything up
-      items.push({
-        id: `virtual-card-${card.id}`,
-        kind: "expense",
-        description: card.bankName,
-        amount: finalSum,
-        paid: false,
-        isRecurring: false,
-        day: card.dueDay,
-        cardId: card.id,
-        cardColor: card.color,
-        cardTransactions: finalSubTransactions,
+        installmentCurrent: effectiveCurrent,
+        installmentTotal: effectiveTotal,
       });
     }
   });
@@ -252,9 +143,6 @@ export interface MonthTotals {
   total: number;
 }
 
-// This function relies on 'items' being fully merged with Card logic.
-// Manual Bills are in 'items'. Virtual Bills are in 'items'.
-// Regular expenses are in 'items'.
 export function calculateTotals(items: DashboardItem[]): MonthTotals {
   let incoming = 0;
   let expense = 0;
@@ -263,12 +151,6 @@ export function calculateTotals(items: DashboardItem[]): MonthTotals {
     if (item.kind === "incoming") {
       incoming += item.amount;
     } else if (item.kind === "expense") {
-      // Logic:
-      // If it's a Manual Bill (Transaction with cardId) -> Added.
-      // If it's a Virtual Bill (starts with virtual-) -> Added.
-      // If it's a regular expense -> Added.
-      // Templates are also added if merged.
-
       expense += getMonthlyAmount(item.amount, item.installmentTotal);
     }
   });

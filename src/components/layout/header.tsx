@@ -10,18 +10,9 @@ import { getDashboardSummaryAction } from "@/app/actions/dashboard";
 import { MonthSwitcher } from "@/components/dashboard/month-switcher";
 import { SummaryCards } from "@/components/dashboard/summary-cards";
 import { TRANSACTION_UPDATED_EVENT } from "@/lib/events";
-import {
-  calculateTotals,
-  getCurrentMonthRef,
-  mergeTransactionsAndTemplates,
-} from "@/lib/finance-logic";
-
-import type {
-  Card,
-  CardTransaction,
-  RecurringTemplate,
-  Transaction,
-} from "@/types";
+import { getCurrentMonthRef } from "@/lib/finance-logic";
+import type { MonthData } from "@/lib/month-data";
+import { buildMonthView } from "@/lib/month-view";
 
 export function Header() {
   const _router = useRouter();
@@ -33,22 +24,14 @@ export function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Data state for Summary Cards
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [templates, setTemplates] = useState<RecurringTemplate[]>([]);
-  const [cards, setCards] = useState<Card[]>([]);
-  const [cardTransactions, setCardTransactions] = useState<CardTransaction[]>(
-    [],
-  );
+  const [monthData, setMonthData] = useState<MonthData | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       if (user) {
         const result = await getDashboardSummaryAction(monthRef);
         if (result.success && result.data) {
-          setTransactions(result.data.transactions);
-          setTemplates(result.data.templates);
-          setCards(result.data.cards);
-          setCardTransactions(result.data.cardTransactions);
+          setMonthData(result.data);
         }
       }
     };
@@ -68,19 +51,10 @@ export function Header() {
     };
   }, [user, monthRef]); // Re-fetch when month changes
 
-  const items = useMemo(() => {
-    return mergeTransactionsAndTemplates(
-      transactions,
-      templates,
-      monthRef,
-      cards,
-      cardTransactions,
-    );
-  }, [transactions, templates, monthRef, cards, cardTransactions]);
-
   const totals = useMemo(() => {
-    return calculateTotals(items);
-  }, [items]);
+    if (!monthData) return { incoming: 0, expense: 0, total: 0 };
+    return buildMonthView(monthData, monthRef, new Date()).totals;
+  }, [monthData, monthRef]);
 
   const handleLogout = async () => {
     await signOut({ callbackUrl: "/login" });

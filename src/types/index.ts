@@ -47,9 +47,7 @@ export interface Transaction {
   transactionDate?: string | null;
 }
 
-export type CardTransaction = InferSelectModel<typeof cardTransactions> & {
-  isRecurring?: boolean;
-};
+export type CardTransaction = InferSelectModel<typeof cardTransactions>;
 
 export type CardBill = InferSelectModel<typeof cardBills>;
 
@@ -68,10 +66,6 @@ export interface DashboardItem {
   transactionId?: string; // If real, the transaction ID
   installmentCurrent?: number;
   installmentTotal?: number;
-  cardTransactions?: CardTransaction[]; // For card invoice items
-  cardId?: string;
-  cardColor?: string;
-  isCardTransaction?: boolean;
   monthRef?: string;
 }
 
