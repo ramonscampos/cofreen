@@ -1,5 +1,7 @@
 import {
+  addMonths,
   differenceInCalendarMonths,
+  format,
   getDaysInMonth,
   isBefore,
   parse,
@@ -216,41 +218,62 @@ export function buildCardBillView({
   };
 
   const bill = cardBills.find((b) => b.monthRef === monthRef);
-  const monthTransactions = cardTransactions.filter(
-    (tx) => tx.monthRef === monthRef,
-  );
+  const monthPurchases = cardTransactions
+    .filter((tx) => tx.monthRef === monthRef)
+    .map((tx) => toPurchase(tx, false))
+    .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+  const sum = (purchases: CardPurchaseView[]) =>
+    purchases.reduce((total, p) => total + p.amount, 0);
 
-  if (bill || monthTransactions.length > 0) {
-    const purchases = monthTransactions
-      .map((tx) => toPurchase(tx, false))
-      .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""));
+  if (bill) {
     return {
       ...empty,
-      status: bill ? billStatus(bill, today) : "open",
-      amount: bill
-        ? Number(bill.totalAmount)
-        : purchases.reduce((sum, p) => sum + p.amount, 0),
-      dueDate: bill ? bill.dueDate : dueDateFor(monthRef, card.dueDay),
-      purchases,
-      categories: summarizeCategories(purchases),
+      status: billStatus(bill, today),
+      amount: Number(bill.totalAmount),
+      dueDate: bill.dueDate,
+      purchases: monthPurchases,
+      categories: summarizeCategories(monthPurchases),
     };
   }
 
-  const latestMonth = [
-    ...cardBills.map((b) => b.monthRef),
-    ...cardTransactions.map((tx) => tx.monthRef),
-  ].sort()[cardBills.length + cardTransactions.length - 1];
+  // The open bill is the one right after the latest closed bill. Later months
+  // are forecasts, even when Pluggy already lists future installments there.
+  const latestBillMonth = cardBills
+    .map((b) => b.monthRef)
+    .sort()
+    .at(-1);
+  const latestTransactionMonth = cardTransactions
+    .map((tx) => tx.monthRef)
+    .sort()
+    .at(-1);
+  const openMonth = latestBillMonth
+    ? format(addMonths(parseMonth(latestBillMonth), 1), "yyyy-MM")
+    : null;
+  const isForecastMonth = openMonth
+    ? monthRef > openMonth
+    : !!latestTransactionMonth && monthRef > latestTransactionMonth;
 
-  if (!latestMonth || monthRef <= latestMonth) return empty;
+  if (!isForecastMonth) {
+    if (monthPurchases.length === 0 && monthRef !== openMonth) return empty;
+    return {
+      ...empty,
+      status: "open",
+      amount: sum(monthPurchases),
+      dueDate: dueDateFor(monthRef, card.dueDay),
+      purchases: monthPurchases,
+      categories: summarizeCategories(monthPurchases),
+    };
+  }
 
   const purchases = [
+    ...monthPurchases,
     ...projectInstallments(cardTransactions, monthRef),
     ...projectRecurring(cardBills, cardTransactions, monthRef),
   ];
   return {
     ...empty,
     status: "forecast",
-    amount: purchases.reduce((sum, p) => sum + p.amount, 0),
+    amount: sum(purchases),
     dueDate: dueDateFor(monthRef, card.dueDay),
     purchases,
     categories: summarizeCategories(purchases),

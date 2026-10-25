@@ -1,3 +1,4 @@
+import { type CursorPage, collectCursorPages } from "./pagination";
 import type {
   PluggyAccount,
   PluggyBill,
@@ -85,8 +86,10 @@ export async function createPluggyClient(): Promise<PluggyClient> {
     listBills: (accountId) =>
       getAllPages<PluggyBill>(`/bills?accountId=${accountId}`),
     listTransactions: (accountId, from) =>
-      getAllPages<PluggyTransaction>(
-        `/transactions?accountId=${accountId}&from=${from}`,
+      collectCursorPages(
+        (query) =>
+          get<CursorPage<PluggyTransaction>>(`/v2/transactions${query}`),
+        `?accountId=${accountId}&dateFrom=${from}`,
       ),
   };
 }

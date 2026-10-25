@@ -195,6 +195,61 @@ describe("forecast", () => {
     ).toMatchObject([{ installmentCurrent: 4, amount: 280 }]);
   });
 
+  it("keeps months after the open bill as forecast even with future rows", () => {
+    const htm = (monthRef: string, current: number) =>
+      tx({
+        monthRef,
+        description: `Htm *Curso ${current}/12`,
+        amount: "9.70",
+        installmentCurrent: current,
+        installmentTotal: 12,
+        purchaseDate: "2026-10-09",
+      });
+    const transactions = [
+      tx({ monthRef: "2026-09", description: "Netflix", amount: "55.90" }),
+      tx({ monthRef: "2026-10", description: "Netflix", amount: "55.90" }),
+      htm("2026-11", 1),
+      htm("2026-12", 2),
+    ];
+
+    const nov = buildCardBillView({
+      card,
+      bills: history,
+      transactions,
+      monthRef: "2026-11",
+      today,
+    });
+    expect(nov.status).toBe("open");
+    expect(nov.amount).toBeCloseTo(9.7);
+
+    const dec = buildCardBillView({
+      card,
+      bills: history,
+      transactions,
+      monthRef: "2026-12",
+      today,
+    });
+    expect(dec.status).toBe("forecast");
+    expect(
+      dec.purchases.map((p) => [p.installmentCurrent ?? null, p.isForecast]),
+    ).toEqual([
+      [2, false],
+      [null, true],
+    ]);
+    expect(dec.amount).toBeCloseTo(65.6);
+
+    const jan = buildCardBillView({
+      card,
+      bills: history,
+      transactions,
+      monthRef: "2027-01",
+      today,
+    });
+    expect(
+      jan.purchases.filter((p) => p.installmentTotal === 12),
+    ).toMatchObject([{ installmentCurrent: 3, isForecast: true }]);
+  });
+
   it("includes recurring seen in last 2 closed bills within 10%", () => {
     const transactions = [
       tx({
