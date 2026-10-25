@@ -10,6 +10,10 @@ export default {
     }),
   ],
   callbacks: {
+    signIn({ user }) {
+      const allowedEmail = process.env.ALLOWED_EMAIL?.toLowerCase();
+      return !!allowedEmail && user.email?.toLowerCase() === allowedEmail;
+    },
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const isApiRoute = nextUrl.pathname.startsWith("/api");
