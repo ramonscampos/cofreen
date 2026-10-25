@@ -6,7 +6,10 @@ import { toast } from "sonner";
 import { TransactionList } from "@/components/dashboard/transaction-list";
 import { Button } from "@/components/ui/button";
 import { triggerTransactionUpdate } from "@/lib/events";
-import { mergeTransactionsAndTemplates } from "@/lib/finance-logic";
+import {
+  buildPaidTemplateTransaction,
+  mergeTransactionsAndTemplates,
+} from "@/lib/finance-logic";
 import { cn } from "@/lib/utils";
 import type {
   ActionResult,
@@ -164,15 +167,7 @@ export function DashboardView({
     if (item.originalTemplateId && !item.transactionId && !item.paid) {
       // It's a template projection being paid. Create it as a real Transaction.
       const result = await createTransactionAction(
-        {
-          description: item.description,
-          amount: item.amount,
-          kind: item.kind,
-          monthRef: initialMonthRef,
-          paid: true,
-          templateId: item.originalTemplateId,
-          isRecurring: item.isRecurring,
-        },
+        buildPaidTemplateTransaction(item, initialMonthRef),
         false,
       );
 

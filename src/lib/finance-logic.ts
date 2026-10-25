@@ -2,6 +2,7 @@ import { differenceInCalendarMonths, parse } from "date-fns";
 import type {
   Card,
   CardTransaction,
+  CreateTransactionPayload,
   DashboardItem,
   RecurringTemplate,
   Transaction,
@@ -269,4 +270,23 @@ export function calculateTotals(items: DashboardItem[]): MonthTotals {
   });
 
   return { incoming, expense, total: incoming - expense };
+}
+
+// Payload for materializing a projected template as a paid transaction.
+// Installment fields must travel along, since amounts are stored as totals.
+export function buildPaidTemplateTransaction(
+  item: DashboardItem,
+  monthRef: string,
+): CreateTransactionPayload & { templateId: string } {
+  return {
+    description: item.description,
+    amount: item.amount,
+    kind: item.kind,
+    monthRef,
+    paid: true,
+    templateId: item.originalTemplateId ?? item.id,
+    isRecurring: item.isRecurring,
+    installmentCurrent: item.installmentCurrent ?? null,
+    installmentTotal: item.installmentTotal ?? null,
+  };
 }
