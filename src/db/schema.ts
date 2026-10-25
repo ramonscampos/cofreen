@@ -78,6 +78,9 @@ export const cards = pgTable("cards", {
   description: text("description"),
   dueDay: integer("due_day").notNull(),
   color: text("color").notNull().default("#000000"),
+  pluggyAccountId: text("pluggy_account_id").unique(),
+  pluggyItemId: text("pluggy_item_id"),
+  closingDay: integer("closing_day"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
     .notNull()
     .defaultNow(),
@@ -142,8 +145,48 @@ export const cardTransactions = pgTable("card_transactions", {
   amount: numeric("amount").notNull(),
   installmentTotal: integer("installment_total"),
   installmentCurrent: integer("installment_current"),
-  planId: uuid("plan_id"),
+  externalId: text("external_id").unique(),
+  billExternalId: text("bill_external_id"),
+  purchaseDate: text("purchase_date"), // Format YYYY-MM-DD
+  category: text("category"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
     .notNull()
     .defaultNow(),
+});
+
+export const cardBills = pgTable("card_bills", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  cardId: uuid("card_id")
+    .notNull()
+    .references(() => cards.id, { onDelete: "cascade" }),
+  externalId: text("external_id").notNull().unique(),
+  monthRef: text("month_ref").notNull(), // Format YYYY-MM (due month)
+  dueDate: text("due_date").notNull(), // Format YYYY-MM-DD
+  closingDate: text("closing_date"), // Format YYYY-MM-DD
+  totalAmount: numeric("total_amount").notNull(),
+  paidAmount: numeric("paid_amount").notNull().default("0"),
+  hasPaymentInfo: boolean("has_payment_info").notNull().default(false),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+    .notNull()
+    .defaultNow(),
+});
+
+export const syncStatus = pgTable("sync_status", {
+  id: text("id").primaryKey(), // Always "pluggy"
+  lastSuccessAt: timestamp("last_success_at", {
+    withTimezone: true,
+    mode: "string",
+  }),
+  lastErrorAt: timestamp("last_error_at", {
+    withTimezone: true,
+    mode: "string",
+  }),
+  lastError: text("last_error"),
+  consentExpiresAt: timestamp("consent_expires_at", {
+    withTimezone: true,
+    mode: "string",
+  }),
 });

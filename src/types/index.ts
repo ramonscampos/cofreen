@@ -1,18 +1,18 @@
+import type { InferSelectModel } from "drizzle-orm";
+import type {
+  cardBills,
+  cards,
+  cardTransactions,
+  syncStatus,
+} from "@/db/schema";
+
 export type Kind = "incoming" | "expense";
 
 export type ActionResult<T = void> =
   | { success: true; data?: T }
   | { success: false; error: string };
 
-export interface Card {
-  id: string;
-  userId: string;
-  bankName: string;
-  description?: string | null;
-  dueDay: number;
-  color: string;
-  createdAt: string;
-}
+export type Card = InferSelectModel<typeof cards>;
 
 export interface RecurringTemplate {
   id: string;
@@ -47,19 +47,13 @@ export interface Transaction {
   transactionDate?: string | null;
 }
 
-export interface CardTransaction {
-  id: string;
-  userId: string;
-  cardId: string;
-  monthRef: string;
-  description: string;
-  amount: string;
-  installmentTotal?: number | null;
-  installmentCurrent?: number | null;
-  planId?: string | null;
-  createdAt: string;
+export type CardTransaction = InferSelectModel<typeof cardTransactions> & {
   isRecurring?: boolean;
-}
+};
+
+export type CardBill = InferSelectModel<typeof cardBills>;
+
+export type SyncStatus = InferSelectModel<typeof syncStatus>;
 
 // Helper type for the unified list view
 export interface DashboardItem {
