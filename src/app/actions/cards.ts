@@ -6,32 +6,12 @@ import { auth } from "@/auth";
 import { db } from "@/db";
 import { cards } from "@/db/schema";
 
-import type { ActionResult, CreateCardPayload } from "@/types";
+import type { ActionResult, UpdateCardPayload } from "@/types";
 
-export async function createCardAction(
-  payload: CreateCardPayload,
-): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Não autenticado" };
-
-  try {
-    await db.insert(cards).values({
-      ...payload,
-      userId: session.user.id,
-    });
-    revalidatePath("/cards");
-    return { success: true };
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Erro desconhecido",
-    };
-  }
-}
-
+// Cards are created by the Pluggy sync; only display fields are editable
 export async function updateCardAction(
   id: string,
-  payload: Partial<CreateCardPayload>,
+  payload: UpdateCardPayload,
 ): Promise<ActionResult> {
   const session = await auth();
   if (!session?.user?.id) return { success: false, error: "Não autenticado" };
@@ -39,27 +19,10 @@ export async function updateCardAction(
   try {
     await db
       .update(cards)
-      .set(payload)
+      .set({ bankName: payload.bankName, color: payload.color })
       .where(and(eq(cards.id, id), eq(cards.userId, session.user.id)));
     revalidatePath("/cards");
-    return { success: true };
-  } catch (err) {
-    return {
-      success: false,
-      error: err instanceof Error ? err.message : "Erro desconhecido",
-    };
-  }
-}
-
-export async function deleteCardAction(id: string): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user?.id) return { success: false, error: "Não autenticado" };
-
-  try {
-    await db
-      .delete(cards)
-      .where(and(eq(cards.id, id), eq(cards.userId, session.user.id)));
-    revalidatePath("/cards");
+    revalidatePath("/dashboard");
     return { success: true };
   } catch (err) {
     return {

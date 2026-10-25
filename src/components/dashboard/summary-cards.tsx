@@ -1,17 +1,11 @@
 import { ArrowDownCircle, ArrowUpCircle, DollarSign } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrency } from "@/lib/format";
 
 interface SummaryCardsProps {
   incoming: number;
   expense: number;
   total: number;
-}
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(value);
 }
 
 export function SummaryCards({ incoming, expense, total }: SummaryCardsProps) {

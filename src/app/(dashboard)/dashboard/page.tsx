@@ -25,13 +25,5 @@ export default async function DashboardPage({
 
   const monthData = await getMonthData(session.user.id, monthRef);
 
-  return (
-    <DashboardView
-      initialMonthRef={monthRef}
-      initialTransactions={monthData.transactions}
-      initialTemplates={monthData.templates}
-      initialCards={monthData.cards}
-      initialCardTransactions={monthData.cardTransactions}
-    />
-  );
+  return <DashboardView initialMonthRef={monthRef} monthData={monthData} />;
 }

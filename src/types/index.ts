@@ -77,10 +77,8 @@ export interface User {
 }
 
 // Payload types for Server Actions to avoid 'any'
-export interface CreateCardPayload {
+export interface UpdateCardPayload {
   bankName: string;
-  description?: string;
-  dueDay: number;
   color: string;
 }
 
@@ -104,7 +102,6 @@ export interface CreateTransactionPayload {
   monthRef: string;
   paid: boolean;
   day?: number;
-  cardId?: string | null;
   templateId?: string | null;
   isRecurring?: boolean;
   installmentCurrent?: number | null;

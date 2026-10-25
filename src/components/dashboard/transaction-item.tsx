@@ -1,12 +1,4 @@
-import {
-  CheckCircle2,
-  ChevronDown,
-  Pencil,
-  Repeat,
-  Trash2,
-  Undo2,
-} from "lucide-react";
-import { useState } from "react";
+import { CheckCircle2, Pencil, Repeat, Trash2, Undo2 } from "lucide-react";
 import { getMonthlyAmount } from "@/lib/finance-logic";
 import { cn } from "@/lib/utils";
 import type { DashboardItem } from "@/types";
@@ -28,10 +20,7 @@ export function TransactionItem({
   onDelete,
   onEdit,
 }: TransactionItemProps) {
-  // const [isOpen, setIsOpen] = useState(false); // Removed local state
-  const [isExpanded, setIsExpanded] = useState(false);
   const isExpense = item.kind === "expense";
-  const hasSubItems = item.cardTransactions && item.cardTransactions.length > 0;
 
   const displayAmount = getMonthlyAmount(item.amount, item.installmentTotal);
 
@@ -48,18 +37,16 @@ export function TransactionItem({
           !isOpen && "opacity-0 pointer-events-none",
         )}
       >
-        {!item.cardId && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(item);
-            }}
-            className="flex-1 bg-red-600 hover:bg-red-700 flex items-center justify-center transition-colors rounded-l-none rounded-r-lg z-3 -mr-4 h-16.5"
-          >
-            <Trash2 className="h-5 w-5 text-white  ml-3" />
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(item);
+          }}
+          className="flex-1 bg-red-600 hover:bg-red-700 flex items-center justify-center transition-colors rounded-l-none rounded-r-lg z-3 -mr-4 h-16.5"
+        >
+          <Trash2 className="h-5 w-5 text-white  ml-3" />
+        </button>
         <button
           type="button"
           onClick={(e) => {
@@ -107,11 +94,6 @@ export function TransactionItem({
             : "bg-[#29292e] hover:bg-[#323238]",
           isOpen ? "w-[calc(100%-11rem)]" : "w-full",
         )}
-        style={{
-          borderLeft: item.cardColor
-            ? `10px solid ${item.cardColor}`
-            : undefined,
-        }}
       >
         <div
           className={cn(
@@ -120,23 +102,6 @@ export function TransactionItem({
           )}
         >
           <div className="text-zinc-300 font-normal text-base flex items-center gap-3 overflow-hidden">
-            {hasSubItems && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsExpanded(!isExpanded);
-                }}
-                className="p-1 hover:bg-zinc-700 rounded-full transition-colors"
-              >
-                <ChevronDown
-                  className={cn(
-                    "h-4 w-4 transition-transform",
-                    isExpanded && "rotate-180",
-                  )}
-                />
-              </button>
-            )}
             <span className={cn("truncate")}>{item.description}</span>
           </div>
 
@@ -196,91 +161,6 @@ export function TransactionItem({
               )}
           </div>
         </div>
-
-        {/* Expanded View for Card Transactions */}
-        {isExpanded && hasSubItems && (
-          <div className="border-t border-zinc-700 py-4 px-4 space-y-2">
-            {item.cardTransactions?.map((sub) => (
-              <div
-                key={sub.id}
-                className="grid grid-cols-[4fr_2fr_2fr_1fr] gap-4 text-sm text-zinc-400 group hover:bg-zinc-800/50 rounded-md p-1 items-center transition-colors"
-              >
-                <div className="flex items-center gap-2 pl-8 overflow-hidden">
-                  {sub.isRecurring && (
-                    <Repeat className="h-3 w-3 shrink-0 text-zinc-500" />
-                  )}
-                  <span className="truncate">{sub.description}</span>
-                </div>
-                <span>
-                  {new Intl.NumberFormat("pt-BR", {
-                    style: "currency",
-                    currency: "BRL",
-                  }).format(
-                    getMonthlyAmount(Number(sub.amount), sub.installmentTotal),
-                  )}
-                </span>
-                <span>
-                  {sub.installmentTotal && sub.installmentTotal > 1
-                    ? `${sub.installmentCurrent}/${sub.installmentTotal}`
-                    : "-"}
-                </span>
-
-                <div className="flex items-center justify-end gap-2 pr-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEdit({
-                        ...item, // Inherit base properties
-                        id: sub.id,
-                        description: sub.description,
-                        amount: Number(sub.amount),
-                        kind: "expense",
-                        isRecurring: sub.isRecurring || false,
-                        isCardTransaction: !sub.isRecurring, // If not recurring, it's a card transaction
-                        originalTemplateId: sub.isRecurring
-                          ? sub.id
-                          : undefined,
-                        installmentCurrent: sub.installmentCurrent || undefined,
-                        installmentTotal: sub.installmentTotal || undefined,
-                        cardId: sub.cardId,
-                        // Keep the plan's start month so saving doesn't shift it
-                        monthRef: sub.monthRef,
-                      } as DashboardItem);
-                    }}
-                    className="p-1 hover:bg-zinc-800 rounded transition-colors"
-                    title="Editar"
-                  >
-                    <Pencil className="h-3.5 w-3.5 text-zinc-500 hover:text-white" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete({
-                        ...item,
-                        id: sub.id,
-                        description: sub.description,
-                        isRecurring: sub.isRecurring || false,
-                        isCardTransaction: !sub.isRecurring,
-                        originalTemplateId: sub.isRecurring
-                          ? sub.id
-                          : undefined,
-                      } as DashboardItem);
-                    }}
-                    className="p-1 hover:bg-zinc-800 rounded transition-colors"
-                    title="Excluir"
-                  >
-                    <Trash2 className="h-3.5 w-3.5 text-zinc-500 hover:text-red-500" />
-                  </button>
-                </div>
-              </div>
-            ))}
-            {item.cardTransactions?.length === 0 && (
-              <p className="text-sm text-zinc-500 pl-8">Nenhuma transação.</p>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );

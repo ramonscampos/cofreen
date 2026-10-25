@@ -6,43 +6,26 @@ import { toast } from "sonner";
 import { TransactionList } from "@/components/dashboard/transaction-list";
 import { Button } from "@/components/ui/button";
 import { triggerTransactionUpdate } from "@/lib/events";
-import {
-  buildPaidTemplateTransaction,
-  mergeTransactionsAndTemplates,
-} from "@/lib/finance-logic";
+import { buildPaidTemplateTransaction } from "@/lib/finance-logic";
+import type { MonthData } from "@/lib/month-data";
+import { buildMonthView } from "@/lib/month-view";
 import { cn } from "@/lib/utils";
-import type {
-  ActionResult,
-  Card,
-  CardTransaction,
-  DashboardItem,
-  Kind,
-  RecurringTemplate,
-  Transaction,
-} from "@/types";
+import type { ActionResult, DashboardItem, Kind } from "@/types";
 
 interface DashboardViewProps {
   initialMonthRef: string;
-  initialTransactions: Transaction[];
-  initialTemplates: RecurringTemplate[];
-  initialCards: Card[];
-  initialCardTransactions: CardTransaction[];
+  monthData: MonthData;
 }
 
 import { ChevronRight, Layers, List } from "lucide-react";
-import { EditBillModal } from "@/components/dashboard/edit-bill-modal";
+import { CardBillsSection } from "@/components/cards/card-bills-section";
 import { ExpenseModal } from "@/components/dashboard/expense-modal";
 import { IncomeModal } from "@/components/dashboard/income-modal";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 
-// ... existing imports
-
 export function DashboardView({
   initialMonthRef,
-  initialTransactions,
-  initialTemplates,
-  initialCards,
-  initialCardTransactions,
+  monthData,
 }: DashboardViewProps) {
   const router = useRouter();
 
@@ -50,31 +33,15 @@ export function DashboardView({
   const [modalKind, setModalKind] = useState<Kind>("incoming");
   const [editingItem, setEditingItem] = useState<DashboardItem | null>(null);
 
-  const [billModalOpen, setBillModalOpen] = useState(false);
-  const [editingBillItem, setEditingBillItem] = useState<DashboardItem | null>(
-    null,
-  );
-
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<DashboardItem | null>(null);
 
   const [viewMode, setViewMode] = useState<"mixed" | "grouped">("mixed");
 
-  const items = useMemo(() => {
-    return mergeTransactionsAndTemplates(
-      initialTransactions,
-      initialTemplates,
-      initialMonthRef,
-      initialCards,
-      initialCardTransactions,
-    );
-  }, [
-    initialTransactions,
-    initialTemplates,
-    initialMonthRef,
-    initialCards,
-    initialCardTransactions,
-  ]);
+  const { items, cardBills } = useMemo(
+    () => buildMonthView(monthData, initialMonthRef, new Date()),
+    [monthData, initialMonthRef],
+  );
 
   const openNewModal = (kind: Kind) => {
     setEditingItem(null);
@@ -84,13 +51,6 @@ export function DashboardView({
 
   /* Handlers */
   const handleEdit = (item: DashboardItem) => {
-    // Check if it's a Card Bill (Virtual or Manual), not an item inside one
-    if (item.cardId && !item.isCardTransaction && !item.isRecurring) {
-      setEditingBillItem(item);
-      setBillModalOpen(true);
-      return;
-    }
-
     setEditingItem(item);
     setModalKind(item.kind);
     setModalOpen(true);
@@ -112,16 +72,11 @@ export function DashboardView({
     ) {
       const { deleteTemplateAction } = await import("@/app/actions/templates");
       result = await deleteTemplateAction(item.id);
-    } else if (item.isCardTransaction) {
-      const { deleteTransactionAction } = await import(
-        "@/app/actions/transactions"
-      );
-      result = await deleteTransactionAction(item.id, true);
     } else {
       const { deleteTransactionAction } = await import(
         "@/app/actions/transactions"
       );
-      result = await deleteTransactionAction(item.id, false);
+      result = await deleteTransactionAction(item.id);
     }
 
     if (result.success) {
@@ -139,36 +94,10 @@ export function DashboardView({
       "@/app/actions/transactions"
     );
 
-    if (item.id.toString().startsWith("virtual-card-")) {
-      // It's a virtual card bill being paid. Create it as a Paid Transaction.
-      const result = await createTransactionAction(
-        {
-          description: item.description,
-          amount: item.amount,
-          kind: "expense", // Bill is expense
-          monthRef: initialMonthRef, // Ensure we use the current view month
-          paid: true,
-          cardId: item.cardId,
-          isRecurring: false,
-        },
-        false,
-      );
-
-      if (result.success) {
-        toast.success("Fatura paga criada!");
-        triggerTransactionUpdate();
-        router.refresh();
-      } else {
-        toast.error("Erro ao pagar fatura");
-      }
-      return;
-    }
-
     if (item.originalTemplateId && !item.transactionId && !item.paid) {
       // It's a template projection being paid. Create it as a real Transaction.
       const result = await createTransactionAction(
         buildPaidTemplateTransaction(item, initialMonthRef),
-        false,
       );
 
       if (result.success) {
@@ -181,11 +110,9 @@ export function DashboardView({
       return;
     }
 
-    const result = await updateTransactionAction(
-      item.id,
-      { paid: !item.paid },
-      !!item.isCardTransaction,
-    );
+    const result = await updateTransactionAction(item.id, {
+      paid: !item.paid,
+    });
 
     if (result.success) {
       toast.success(item.paid ? "Marcado como não pago" : "Marcado como pago");
@@ -221,7 +148,7 @@ export function DashboardView({
           className="text-white font-bold text-sm hover:underline flex items-center gap-1 transition-colors"
           onClick={() => router.push("/cards")}
         >
-          Listar cartões cadastrados
+          Gerenciar cartões
           <ChevronRight size={16} />
         </button>
       </div>
@@ -257,6 +184,8 @@ export function DashboardView({
         </div>
       </div>
 
+      <CardBillsSection bills={cardBills} syncStatus={monthData.syncStatus} />
+
       <div className="grid gap-2">
         <h2 className="sr-only">Transações</h2>
         <TransactionList
@@ -279,15 +208,7 @@ export function DashboardView({
         isOpen={modalOpen && modalKind === "expense"}
         onClose={() => setModalOpen(false)}
         monthRef={initialMonthRef}
-        userCards={initialCards}
         initialData={editingItem}
-      />
-
-      <EditBillModal
-        isOpen={billModalOpen}
-        onClose={() => setBillModalOpen(false)}
-        item={editingBillItem}
-        monthRef={initialMonthRef}
       />
 
       <ConfirmationModal

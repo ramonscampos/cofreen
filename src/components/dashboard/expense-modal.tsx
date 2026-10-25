@@ -14,7 +14,6 @@ import { triggerTransactionUpdate } from "@/lib/events";
 import { cn } from "@/lib/utils";
 import type {
   ActionResult,
-  Card,
   CreateTemplatePayload,
   CreateTransactionPayload,
   DashboardItem,
@@ -24,7 +23,6 @@ interface ExpenseModalProps {
   isOpen: boolean;
   onClose: () => void;
   monthRef: string;
-  userCards?: Card[];
   initialData?: DashboardItem | null;
 }
 
@@ -32,7 +30,6 @@ export function ExpenseModal({
   isOpen,
   onClose,
   monthRef,
-  userCards = [],
   initialData,
 }: ExpenseModalProps) {
   const router = useRouter();
@@ -52,10 +49,6 @@ export function ExpenseModal({
 
   // Date state
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-
-  // Card state
-  const [cardId, setCardId] = useState<string | null>(null);
-  const useCard = !!cardId;
 
   useEffect(() => {
     if (isOpen) {
@@ -77,12 +70,6 @@ export function ExpenseModal({
         } else {
           setSelectedDate(new Date());
         }
-
-        if (initialData.cardId) {
-          setCardId(initialData.cardId);
-        } else {
-          setCardId(null);
-        }
       } else {
         // Reset
         setDescription("");
@@ -92,7 +79,6 @@ export function ExpenseModal({
         setIsInstallment(false);
         setInstallments("");
         setInstallmentCurrent("1");
-        setCardId(null);
         if (monthRef) setSelectedDate(parse(monthRef, "yyyy-MM", new Date()));
         else setSelectedDate(new Date());
       }
@@ -145,61 +131,25 @@ export function ExpenseModal({
       }
 
       const { createTemplateAction } = await import("@/app/actions/templates");
-      const { createTransactionAction } = await import(
-        "@/app/actions/transactions"
-      );
+      const result = await createTemplateAction({
+        description,
+        defaultAmount: numericAmount.toString(),
+        kind: "expense",
+        dayOfMonth: selectedDate.getDate(),
+        monthRef: format(selectedDate, "yyyy-MM"),
+        installmentCurrent: current,
+        installmentTotal: count,
+        isActive: true,
+      });
 
-      // CASE A: Card Installments -> Generate SINGLE Master Record in card_transactions
-      if (useCard && cardId) {
-        const monthRefStr = format(selectedDate, "yyyy-MM");
-
-        const result = await createTransactionAction(
-          {
-            description,
-            amount: numericAmount.toString(),
-            cardId: cardId,
-            monthRef: monthRefStr,
-            installmentCurrent: current,
-            installmentTotal: count,
-            kind: "expense",
-            paid: false,
-          } as CreateTransactionPayload,
-
-          true,
-        ); // isCardTransaction = true
-
-        if (!result.success) {
-          console.error(result.error);
-          toast.error("Erro ao configurar parcelamento no cartão");
-        } else {
-          toast.success("Parcelamento no cartão configurado!");
-          triggerTransactionUpdate();
-          router.refresh();
-          onClose();
-        }
-      }
-      // CASE B: Manual Installments -> Create SINGLE recurring_template
-      else {
-        const result = await createTemplateAction({
-          description,
-          defaultAmount: numericAmount.toString(),
-          kind: "expense",
-          dayOfMonth: selectedDate.getDate(),
-          monthRef: format(selectedDate, "yyyy-MM"),
-          installmentCurrent: current,
-          installmentTotal: count,
-          isActive: true,
-        });
-
-        if (!result.success) {
-          console.error(result.error);
-          toast.error("Erro ao configurar parcelamento");
-        } else {
-          toast.success("Parcelamento configurado!");
-          triggerTransactionUpdate();
-          router.refresh();
-          onClose();
-        }
+      if (!result.success) {
+        console.error(result.error);
+        toast.error("Erro ao configurar parcelamento");
+      } else {
+        toast.success("Parcelamento configurado!");
+        triggerTransactionUpdate();
+        router.refresh();
+        onClose();
       }
 
       setLoading(false);
@@ -214,7 +164,6 @@ export function ExpenseModal({
       description,
       [isRecurring ? "defaultAmount" : "amount"]: numericAmount.toString(), // recurring uses defaultAmount
       kind: "expense",
-      cardId: useCard ? cardId : null,
       ...(isRecurring
         ? { dayOfMonth: Number.parseInt(day, 10) || 1 }
         : {
@@ -244,25 +193,11 @@ export function ExpenseModal({
           initialData.id,
           payload as Partial<CreateTemplatePayload>,
         );
-      } else if (initialData.isCardTransaction) {
-        // CASE 2: Update Card Transaction
-        result = await updateTransactionAction(
-          initialData.id,
-          {
-            description,
-            amount: numericAmount.toString(),
-            cardId: useCard ? cardId : null,
-            monthRef: monthRefStr,
-            paid: initialData.paid,
-          } as Partial<CreateTransactionPayload>,
-          true,
-        );
       } else {
-        // CASE 3: Update Existing Transaction
+        // CASE 2: Update Existing Transaction
         result = await updateTransactionAction(
           initialData.id,
           payload as Partial<CreateTransactionPayload>,
-          false,
         );
       }
     } else {
@@ -272,29 +207,10 @@ export function ExpenseModal({
           payload as unknown as CreateTemplatePayload,
         );
       } else {
-        // CASE 4: Create New Expense
-        if (useCard && cardId) {
-          // NEW RULE: Card Expenses go to `card_transactions`
-          result = await createTransactionAction(
-            {
-              description,
-              amount: numericAmount.toString(),
-              cardId: cardId,
-              monthRef: monthRefStr,
-              installmentCurrent: 1,
-              installmentTotal: 1,
-              kind: "expense",
-              paid: false,
-            } as CreateTransactionPayload,
-            true,
-          );
-        } else {
-          // Normal Expense (Cash/Debit) -> `transactions`
-          result = await createTransactionAction(
-            payload as unknown as CreateTransactionPayload,
-            false,
-          );
-        }
+        // CASE 3: Create New Expense
+        result = await createTransactionAction(
+          payload as unknown as CreateTransactionPayload,
+        );
       }
     }
 
@@ -478,43 +394,6 @@ export function ExpenseModal({
             {/* Day input moved above */}
           </div>
         </div>
-
-        {/* Card Section */}
-        {userCards.length > 0 && (
-          <div className="space-y-3 border-t border-zinc-800 pt-4">
-            <div className="flex flex-wrap gap-2 pl-1">
-              {userCards.map((card) => {
-                const isSelected = cardId === card.id;
-                return (
-                  <div
-                    key={card.id}
-                    onClick={() => {
-                      if (isSelected) {
-                        setCardId(null);
-                      } else {
-                        setCardId(card.id);
-                      }
-                    }}
-                    className={cn(
-                      "cursor-pointer px-3 py-1.5 rounded-full text-xs font-bold transition-all border-2 flex items-center gap-2 text-white shadow-sm",
-                      isSelected
-                        ? "border-white scale-105 opacity-100"
-                        : "border-transparent opacity-50 hover:opacity-100",
-                    )}
-                    style={{
-                      backgroundColor: card.color,
-                    }}
-                  >
-                    <span>
-                      {card.bankName}
-                      {card.description ? ` - ${card.description}` : ""}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         <div className="flex justify-end gap-2 pt-4">
           <Button
