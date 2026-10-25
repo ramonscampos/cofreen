@@ -4,6 +4,9 @@ import { getCurrentMonthRef } from "@/lib/finance-logic";
 import { getMonthData } from "@/lib/month-data";
 import { DashboardView } from "../dashboard-view";
 
+// The "Sincronizar agora" action runs under this page
+export const maxDuration = 60;
+
 interface SearchParams {
   month?: string;
 }

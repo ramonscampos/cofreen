@@ -120,28 +120,41 @@ function billStatus(bill: CardBill, today: Date): CardBillStatus {
   return isBefore(due, startOfDay(today)) ? "paid_inferred" : "closed";
 }
 
+// Each installment series is projected from its most advanced synced row, so
+// a series not yet posted to the open bill still shows up in later months
 function projectInstallments(
   transactions: CardTransaction[],
-  latestMonth: string,
   monthRef: string,
 ): CardPurchaseView[] {
-  const offset = differenceInCalendarMonths(
-    parseMonth(monthRef),
-    parseMonth(latestMonth),
-  );
-  return transactions
-    .filter((tx) => tx.monthRef === latestMonth && isInstallment(tx))
-    .flatMap((tx) => {
-      const current = (tx.installmentCurrent ?? 1) + offset;
-      if (current > (tx.installmentTotal ?? 0)) return [];
-      return [
-        {
-          ...toPurchase(tx, true),
-          id: `${tx.id}-forecast-${monthRef}`,
-          installmentCurrent: current,
-        },
-      ];
-    });
+  const latestBySeries = new Map<string, CardTransaction>();
+  for (const tx of transactions.filter(isInstallment)) {
+    const key = [
+      normalizeDescription(tx.description),
+      tx.installmentTotal,
+      tx.purchaseDate,
+      tx.amount,
+    ].join("|");
+    const current = latestBySeries.get(key);
+    if (!current || tx.monthRef > current.monthRef) {
+      latestBySeries.set(key, tx);
+    }
+  }
+
+  return [...latestBySeries.values()].flatMap((tx) => {
+    const offset = differenceInCalendarMonths(
+      parseMonth(monthRef),
+      parseMonth(tx.monthRef),
+    );
+    const current = (tx.installmentCurrent ?? 1) + offset;
+    if (offset <= 0 || current > (tx.installmentTotal ?? 0)) return [];
+    return [
+      {
+        ...toPurchase(tx, true),
+        id: `${tx.id}-forecast-${monthRef}`,
+        installmentCurrent: current,
+      },
+    ];
+  });
 }
 
 // Non-installment charges present in both of the last two closed bills
@@ -231,7 +244,7 @@ export function buildCardBillView({
   if (!latestMonth || monthRef <= latestMonth) return empty;
 
   const purchases = [
-    ...projectInstallments(cardTransactions, latestMonth, monthRef),
+    ...projectInstallments(cardTransactions, monthRef),
     ...projectRecurring(cardBills, cardTransactions, monthRef),
   ];
   return {

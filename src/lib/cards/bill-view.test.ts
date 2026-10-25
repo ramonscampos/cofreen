@@ -178,6 +178,23 @@ describe("forecast", () => {
     expect(sep.amount).toBe(0);
   });
 
+  it("projects series that have not posted to the open bill yet", () => {
+    const transactions = [
+      tv("2026-10", 2),
+      tx({ monthRef: "2026-11", description: "Mercado", amount: "200" }),
+    ];
+    const dec = buildCardBillView({
+      card,
+      bills: history,
+      transactions,
+      monthRef: "2026-12",
+      today,
+    });
+    expect(
+      dec.purchases.filter((p) => p.installmentTotal === 10),
+    ).toMatchObject([{ installmentCurrent: 4, amount: 280 }]);
+  });
+
   it("includes recurring seen in last 2 closed bills within 10%", () => {
     const transactions = [
       tx({

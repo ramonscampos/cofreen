@@ -21,9 +21,12 @@ if (mode === "--backup") {
     `backup: ${target} (cards ${dump.cards.length}, transactions ${dump.transactions.length}, templates ${dump.recurring_templates.length})`,
   );
 } else if (mode === "--apply") {
-  const [linked] = await sql`select count(*)::int n from cards where pluggy_account_id is not null`;
+  const [linked] =
+    await sql`select count(*)::int n from cards where pluggy_account_id is not null`;
   if (linked.n === 0) {
-    throw new Error("No Pluggy-linked cards yet: run the first sync before cleanup");
+    throw new Error(
+      "No Pluggy-linked cards yet: run the first sync before cleanup",
+    );
   }
   const [transactions, templates, cards] = await sql.transaction([
     sql`delete from transactions returning id`,

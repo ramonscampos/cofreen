@@ -1,5 +1,5 @@
 import { addMonths, format, parse } from "date-fns";
-import type { PluggyBill, PluggyTransaction } from "./types";
+import type { PluggyBill, PluggyItem, PluggyTransaction } from "./types";
 
 const toDate = (value: string) => value.slice(0, 10);
 const toMonth = (value: string) => value.slice(0, 7);
@@ -29,14 +29,23 @@ export function resolveBillMonth(input: BillMonthInput): string {
   return format(dueMonth, "yyyy-MM");
 }
 
-const BILL_PAYMENT_DESCRIPTION = /pagamento (de fatura|recebido)|pgto fatura/i;
+const BILL_PAYMENT_DESCRIPTION =
+  /pagamento (de fatura|recebido|efetuado)|pgto|pagto|obrigad[oa]/i;
 const BILL_PAYMENT_CATEGORY = /credit card payment/i;
+const MONEY_TOLERANCE = 0.01;
 
-export function isBillPayment(tx: PluggyTransaction): boolean {
+// The card account lists last bill's payment as a credit; it is not a refund
+export function isBillPayment(
+  tx: PluggyTransaction,
+  billTotals: number[] = [],
+): boolean {
   if (tx.type !== "CREDIT") return false;
   return (
     BILL_PAYMENT_CATEGORY.test(tx.category ?? "") ||
-    BILL_PAYMENT_DESCRIPTION.test(tx.description)
+    BILL_PAYMENT_DESCRIPTION.test(tx.description) ||
+    billTotals.some(
+      (total) => Math.abs(Math.abs(tx.amount) - total) <= MONEY_TOLERANCE,
+    )
   );
 }
 
@@ -86,7 +95,8 @@ export function mapTransaction(
   tx: PluggyTransaction,
   ctx: MapTransactionContext,
 ): MappedTransaction | null {
-  if (isBillPayment(tx)) return null;
+  const billTotals = [...ctx.billsById.values()].map((b) => b.totalAmount);
+  if (isBillPayment(tx, billTotals)) return null;
 
   const meta = tx.creditCardMetadata ?? {};
   const billId = meta.billId ?? null;
@@ -126,6 +136,26 @@ export function deriveCardDays(
       ? Number(toDate(latest.billClosingDate).slice(8, 10))
       : null,
   };
+}
+
+export function evaluateItem(
+  item: PluggyItem,
+  now: Date,
+): { ok: true } | { ok: false; error: string } {
+  if (item.error || item.status === "LOGIN_ERROR") {
+    return { ok: false, error: item.error?.code ?? item.status };
+  }
+  // Reads come back empty after consent expires, which would look like success
+  if (item.consentExpiresAt && new Date(item.consentExpiresAt) <= now) {
+    return { ok: false, error: "USER_AUTHORIZATION_EXPIRED" };
+  }
+  return { ok: true };
+}
+
+// External ids to keep when pruning vanished purchases; null means skip the
+// prune, since an empty fetch is far likelier a failed read than no purchases
+export function planStalePrune(fetchedIds: string[]): string[] | null {
+  return fetchedIds.length > 0 ? fetchedIds : null;
 }
 
 export interface ItemSyncResult {

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   deriveCardDays,
+  evaluateItem,
   isBillPayment,
   mapBill,
   mapTransaction,
+  planStalePrune,
   resolveBillMonth,
   summarizeSync,
 } from "./mapping";
@@ -93,6 +95,25 @@ describe("isBillPayment", () => {
     ).toBe(true);
   });
 
+  it("catches common payment wordings", () => {
+    for (const description of [
+      "PAGTO. POR DEB EM C/C",
+      "Pagamento efetuado",
+      "PAGAMENTO - OBRIGADO",
+    ]) {
+      expect(isBillPayment(tx({ type: "CREDIT", description }))).toBe(true);
+    }
+  });
+
+  it("treats a credit matching a bill total as a payment", () => {
+    expect(
+      isBillPayment(
+        tx({ type: "CREDIT", description: "Crédito", amount: 4000 }),
+        [1200, 4000],
+      ),
+    ).toBe(true);
+  });
+
   it("keeps refunds", () => {
     expect(
       isBillPayment(tx({ type: "CREDIT", description: "Estorno Amazon" })),
@@ -141,6 +162,15 @@ describe("mapTransaction", () => {
         ctx,
       ),
     ).toMatchObject({ amount: "-50" });
+  });
+
+  it("drops a credit equal to a synced bill total", () => {
+    expect(
+      mapTransaction(
+        tx({ type: "CREDIT", amount: 1000, description: "Crédito em conta" }),
+        ctx,
+      ),
+    ).toBeNull();
   });
 
   it("drops bill payments", () => {
@@ -225,5 +255,58 @@ describe("summarizeSync", () => {
     expect(
       summarizeSync([{ itemId: "a", ok: true, consentExpiresAt: null }]),
     ).toEqual({ ok: true, error: null, consentExpiresAt: null });
+  });
+});
+
+describe("evaluateItem", () => {
+  const now = new Date("2026-11-01T00:00:00Z");
+
+  it("fails when consent already expired", () => {
+    expect(
+      evaluateItem(
+        {
+          id: "i",
+          status: "UPDATED",
+          consentExpiresAt: "2026-10-01T00:00:00Z",
+        },
+        now,
+      ),
+    ).toEqual({ ok: false, error: "USER_AUTHORIZATION_EXPIRED" });
+  });
+
+  it("fails on login error", () => {
+    expect(
+      evaluateItem(
+        {
+          id: "i",
+          status: "LOGIN_ERROR",
+          error: { code: "INVALID_CREDENTIALS" },
+        },
+        now,
+      ),
+    ).toEqual({ ok: false, error: "INVALID_CREDENTIALS" });
+  });
+
+  it("passes an updated item with valid consent", () => {
+    expect(
+      evaluateItem(
+        {
+          id: "i",
+          status: "UPDATED",
+          consentExpiresAt: "2027-10-01T00:00:00Z",
+        },
+        now,
+      ),
+    ).toEqual({ ok: true });
+  });
+});
+
+describe("planStalePrune", () => {
+  it("never prunes when Pluggy returned nothing", () => {
+    expect(planStalePrune([])).toBeNull();
+  });
+
+  it("keeps the fetched ids", () => {
+    expect(planStalePrune(["a", "b"])).toEqual(["a", "b"]);
   });
 });
