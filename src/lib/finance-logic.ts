@@ -1,3 +1,4 @@
+import { differenceInCalendarMonths, parse } from "date-fns";
 import type {
   Card,
   CardTransaction,
@@ -43,9 +44,11 @@ export function formatMonthDisplay(monthRef: string): string {
 }
 
 export function getMonthDiff(fromMonthRef: string, toMonthRef: string): number {
-  const [fromYear, fromMonth] = fromMonthRef.split("-").map(Number);
-  const [toYear, toMonth] = toMonthRef.split("-").map(Number);
-  return (toYear - fromYear) * 12 + (toMonth - fromMonth);
+  const reference = new Date();
+  return differenceInCalendarMonths(
+    parse(toMonthRef, "yyyy-MM", reference),
+    parse(fromMonthRef, "yyyy-MM", reference),
+  );
 }
 
 // Installment amounts are stored as the purchase total

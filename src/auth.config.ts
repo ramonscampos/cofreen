@@ -10,9 +10,13 @@ export default {
     }),
   ],
   callbacks: {
-    signIn({ user }) {
+    signIn({ user, profile }) {
       const allowedEmail = process.env.ALLOWED_EMAIL?.toLowerCase();
-      return !!allowedEmail && user.email?.toLowerCase() === allowedEmail;
+      return (
+        !!allowedEmail &&
+        profile?.email_verified === true &&
+        user.email?.toLowerCase() === allowedEmail
+      );
     },
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;

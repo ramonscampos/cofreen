@@ -7,6 +7,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { useState } from "react";
+import { getMonthlyAmount } from "@/lib/finance-logic";
 import { cn } from "@/lib/utils";
 import type { DashboardItem } from "@/types";
 
@@ -32,10 +33,7 @@ export function TransactionItem({
   const isExpense = item.kind === "expense";
   const hasSubItems = item.cardTransactions && item.cardTransactions.length > 0;
 
-  const displayAmount =
-    item.installmentTotal && item.installmentTotal > 1
-      ? item.amount / item.installmentTotal
-      : item.amount;
+  const displayAmount = getMonthlyAmount(item.amount, item.installmentTotal);
 
   const amount = new Intl.NumberFormat("pt-BR", {
     style: "currency",
@@ -218,9 +216,7 @@ export function TransactionItem({
                     style: "currency",
                     currency: "BRL",
                   }).format(
-                    sub.installmentTotal && sub.installmentTotal > 1
-                      ? Number(sub.amount) / sub.installmentTotal
-                      : Number(sub.amount),
+                    getMonthlyAmount(Number(sub.amount), sub.installmentTotal),
                   )}
                 </span>
                 <span>

@@ -81,8 +81,8 @@ export function DashboardView({
 
   /* Handlers */
   const handleEdit = (item: DashboardItem) => {
-    // Check if it's a Card Bill (Virtual or Manual)
-    if (item.cardId) {
+    // Check if it's a Card Bill (Virtual or Manual), not an item inside one
+    if (item.cardId && !item.isCardTransaction && !item.isRecurring) {
       setEditingBillItem(item);
       setBillModalOpen(true);
       return;

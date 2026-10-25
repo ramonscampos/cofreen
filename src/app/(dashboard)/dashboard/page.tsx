@@ -1,14 +1,7 @@
-import { and, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { db } from "@/db";
-import {
-  cards,
-  cardTransactions,
-  recurringTemplates,
-  transactions,
-} from "@/db/schema";
 import { getCurrentMonthRef } from "@/lib/finance-logic";
+import { getMonthData } from "@/lib/month-data";
 import { DashboardView } from "../dashboard-view";
 
 interface SearchParams {
@@ -30,47 +23,15 @@ export default async function DashboardPage({
   const params = await searchParams;
   const monthRef = params.month || getCurrentMonthRef();
 
-  // Fetch initial data for the month
-  // We fetch in parallel for performance
-  const [transactionsRes, templatesRes, cardsRes, cardTransRes] =
-    await Promise.all([
-      db
-        .select()
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.userId, session.user.id),
-            eq(transactions.monthRef, monthRef),
-          ),
-        ),
-      db
-        .select()
-        .from(recurringTemplates)
-        .where(
-          and(
-            eq(recurringTemplates.userId, session.user.id),
-            eq(recurringTemplates.isActive, true),
-          ),
-        ),
-      db.select().from(cards).where(eq(cards.userId, session.user.id)),
-      db
-        .select()
-        .from(cardTransactions)
-        .where(
-          and(
-            eq(cardTransactions.userId, session.user.id),
-            eq(cardTransactions.monthRef, monthRef),
-          ),
-        ),
-    ]);
+  const monthData = await getMonthData(session.user.id, monthRef);
 
   return (
     <DashboardView
       initialMonthRef={monthRef}
-      initialTransactions={transactionsRes}
-      initialTemplates={templatesRes}
-      initialCards={cardsRes}
-      initialCardTransactions={cardTransRes}
+      initialTransactions={monthData.transactions}
+      initialTemplates={monthData.templates}
+      initialCards={monthData.cards}
+      initialCardTransactions={monthData.cardTransactions}
     />
   );
 }
