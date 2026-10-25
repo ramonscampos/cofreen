@@ -4,7 +4,7 @@ import { differenceInDays, format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { syncCardsAction } from "@/app/actions/sync";
 import { triggerTransactionUpdate } from "@/lib/events";
@@ -21,9 +21,24 @@ export function SyncStatusBar({ status }: SyncStatusBarProps) {
   const router = useRouter();
   const [syncing, setSyncing] = useState(false);
 
+  const autoSyncStarted = useRef(false);
+
+  // Opening the app syncs on its own, at most once a day (checked on the server)
+  useEffect(() => {
+    if (autoSyncStarted.current) return;
+    autoSyncStarted.current = true;
+    setSyncing(true);
+    syncCardsAction().then((result) => {
+      setSyncing(false);
+      if (result.success && result.data?.skipped) return;
+      triggerTransactionUpdate();
+      router.refresh();
+    });
+  }, [router]);
+
   const handleSync = async () => {
     setSyncing(true);
-    const result = await syncCardsAction();
+    const result = await syncCardsAction({ force: true });
     setSyncing(false);
     if (result.success) {
       toast.success("Cartões sincronizados!");
