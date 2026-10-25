@@ -9,6 +9,7 @@ export interface PluggyAccount {
   id: string;
   type: "BANK" | "CREDIT";
   name: string;
+  balance: number;
   marketingName?: string | null;
   number?: string | null;
   creditData?: { balanceDueDate?: string | null } | null;

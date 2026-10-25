@@ -12,6 +12,8 @@ const card: Card = {
   color: "#8257e5",
   pluggyAccountId: "acc-1",
   pluggyItemId: "item-1",
+  balance: null,
+  openBillSource: "transactions",
   createdAt: "2026-01-01T00:00:00Z",
 };
 
@@ -144,6 +146,88 @@ describe("real bills", () => {
     expect(view.amount).toBe(350);
     expect(view.purchases).toHaveLength(3);
     expect(view.purchases.every((p) => !p.isForecast)).toBe(true);
+  });
+});
+
+describe("open bill from card balance", () => {
+  const nubank: Card = {
+    ...card,
+    balance: "5556.81",
+    openBillSource: "balance",
+  };
+  const transactions = [
+    tx({
+      monthRef: "2026-11",
+      description: "Renegociação 1/2",
+      amount: "1950.81",
+      installmentCurrent: 1,
+      installmentTotal: 2,
+    }),
+    tx({
+      monthRef: "2026-11",
+      description: "Crédito de parcelamento",
+      amount: "-3418.96",
+    }),
+    tx({
+      monthRef: "2026-11",
+      description: "Pix no Crédito",
+      amount: "2770.52",
+    }),
+    tx({
+      monthRef: "2026-12",
+      description: "Renegociação 2/2",
+      amount: "1950.81",
+      installmentCurrent: 2,
+      installmentTotal: 2,
+    }),
+    tx({
+      monthRef: "2027-01",
+      description: "Curso 3/12",
+      amount: "9.70",
+      installmentCurrent: 3,
+      installmentTotal: 12,
+    }),
+  ];
+
+  it("is the balance minus installments listed for later bills", () => {
+    const view = buildCardBillView({
+      card: nubank,
+      bills: [bill({ monthRef: "2026-10" })],
+      transactions,
+      monthRef: "2026-11",
+      today,
+    });
+    expect(view.status).toBe("open");
+    expect(view.amount).toBeCloseTo(3596.3);
+  });
+
+  it("adds an adjustment row so the list adds up to the bill", () => {
+    const view = buildCardBillView({
+      card: nubank,
+      bills: [bill({ monthRef: "2026-10" })],
+      transactions,
+      monthRef: "2026-11",
+      today,
+    });
+    const adjustment = view.purchases.find(
+      (p) => p.description === "Saldo anterior e ajustes",
+    );
+    expect(adjustment?.amount).toBeCloseTo(3596.3 - 1302.37);
+    expect(view.purchases.reduce((sum, p) => sum + p.amount, 0)).toBeCloseTo(
+      view.amount,
+    );
+    expect(view.categories.some((c) => c.category === "Ajustes")).toBe(false);
+  });
+
+  it("falls back to summing purchases without a balance", () => {
+    const view = buildCardBillView({
+      card: { ...nubank, balance: null },
+      bills: [bill({ monthRef: "2026-10" })],
+      transactions,
+      monthRef: "2026-11",
+      today,
+    });
+    expect(view.amount).toBeCloseTo(1302.37);
   });
 });
 

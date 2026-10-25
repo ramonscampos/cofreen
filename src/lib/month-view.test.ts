@@ -47,6 +47,8 @@ const data: MonthData = {
       color: "#8257e5",
       pluggyAccountId: "acc-1",
       pluggyItemId: "item-1",
+      balance: null,
+      openBillSource: "transactions",
       createdAt: "2026-01-01T00:00:00Z",
     },
   ],

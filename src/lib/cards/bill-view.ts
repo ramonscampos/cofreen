@@ -62,6 +62,8 @@ interface BuildCardBillViewInput {
 const MONEY_TOLERANCE = 0.01;
 const RECURRING_TOLERANCE = 0.1;
 const FALLBACK_CATEGORY = "Outros";
+const ADJUSTMENT_DESCRIPTION = "Saldo anterior e ajustes";
+const ADJUSTMENT_CATEGORY = "Ajustes";
 
 const parseMonth = (monthRef: string) => parse(monthRef, "yyyy-MM", new Date());
 
@@ -257,12 +259,38 @@ export function buildCardBillView({
 
   if (!isForecastMonth) {
     if (monthPurchases.length === 0 && monthRef !== openMonth) return empty;
+    const purchasesTotal = sum(monthPurchases);
+    const useBalance =
+      monthRef === openMonth &&
+      card.openBillSource === "balance" &&
+      card.balance !== null;
+    const amount = useBalance
+      ? Number(card.balance) -
+        cardTransactions
+          .filter((tx) => tx.monthRef > monthRef)
+          .reduce((total, tx) => total + Number(tx.amount), 0)
+      : purchasesTotal;
+    const adjustment = amount - purchasesTotal;
+    const purchases =
+      Math.abs(adjustment) > MONEY_TOLERANCE
+        ? [
+            ...monthPurchases,
+            {
+              id: `${card.id}-adjustment-${monthRef}`,
+              description: ADJUSTMENT_DESCRIPTION,
+              date: null,
+              amount: adjustment,
+              category: ADJUSTMENT_CATEGORY,
+              isForecast: false,
+            },
+          ]
+        : monthPurchases;
     return {
       ...empty,
       status: "open",
-      amount: sum(monthPurchases),
+      amount,
       dueDate: dueDateFor(monthRef, card.dueDay),
-      purchases: monthPurchases,
+      purchases,
       categories: summarizeCategories(monthPurchases),
     };
   }

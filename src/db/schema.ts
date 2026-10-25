@@ -81,6 +81,14 @@ export const cards = pgTable("cards", {
   pluggyAccountId: text("pluggy_account_id").unique(),
   pluggyItemId: text("pluggy_item_id"),
   closingDay: integer("closing_day"),
+  // Credit used as reported by Pluggy (open bill + future installments)
+  balance: numeric("balance"),
+  // How the open bill amount is derived: card balance or summed purchases
+  openBillSource: text("open_bill_source", {
+    enum: ["balance", "transactions"],
+  })
+    .notNull()
+    .default("transactions"),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
     .notNull()
     .defaultNow(),

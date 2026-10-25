@@ -171,6 +171,18 @@ export function planStalePrune(fetchedIds: string[]): string[] | null {
   return fetchedIds.length > 0 ? fetchedIds : null;
 }
 
+export type OpenBillSource = "balance" | "transactions";
+
+// Nubank reports the open bill (including carried balance and renegotiations)
+// inside the card balance; Bradesco's balance also holds unlisted installments
+export function detectOpenBillSource(
+  bankAccountNames: string[],
+): OpenBillSource {
+  return bankAccountNames.some((name) => /nu pagamentos|nubank/i.test(name))
+    ? "balance"
+    : "transactions";
+}
+
 export interface ItemSyncResult {
   itemId: string;
   // Shown to the user instead of the item id

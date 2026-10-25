@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   deriveCardDays,
+  detectOpenBillSource,
   evaluateItem,
   isBillPayment,
   mapBill,
@@ -338,5 +339,20 @@ describe("planStalePrune", () => {
 
   it("keeps the fetched ids", () => {
     expect(planStalePrune(["a", "b"])).toEqual(["a", "b"]);
+  });
+});
+
+describe("detectOpenBillSource", () => {
+  it("uses the card balance for Nubank", () => {
+    expect(
+      detectOpenBillSource(["Nu Pagamentos S.A. - Instituição de Pagamento"]),
+    ).toBe("balance");
+  });
+
+  it("sums purchases for other banks", () => {
+    expect(detectOpenBillSource(["Banco Bradesco", "Banco Bradesco"])).toBe(
+      "transactions",
+    );
+    expect(detectOpenBillSource([])).toBe("transactions");
   });
 });

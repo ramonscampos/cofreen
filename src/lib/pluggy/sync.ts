@@ -12,10 +12,12 @@ import {
 import { createPluggyClient, type PluggyClient } from "./client";
 import {
   deriveCardDays,
+  detectOpenBillSource,
   evaluateItem,
   type ItemSyncResult,
   mapBill,
   mapTransaction,
+  type OpenBillSource,
   planStalePrune,
   summarizeSync,
 } from "./mapping";
@@ -43,6 +45,7 @@ async function syncAccount(
   account: PluggyAccount,
   from: string,
   categoryNames: Map<string, string>,
+  openBillSource: OpenBillSource,
 ) {
   const bills = await client.listBills(account.id);
   const days = deriveCardDays(bills, account.creditData?.balanceDueDate);
@@ -57,11 +60,15 @@ async function syncAccount(
       closingDay: days?.closingDay ?? null,
       pluggyAccountId: account.id,
       pluggyItemId: itemId,
+      balance: String(account.balance),
+      openBillSource,
     })
     .onConflictDoUpdate({
       target: cards.pluggyAccountId,
       set: {
         pluggyItemId: itemId,
+        balance: String(account.balance),
+        openBillSource,
         ...(days ? { dueDay: days.dueDay, closingDay: days.closingDay } : {}),
       },
     })
@@ -187,6 +194,9 @@ export async function syncPluggyCards(): Promise<{
           continue;
         }
         const accounts = await client.listAccounts(itemId);
+        const openBillSource = detectOpenBillSource(
+          accounts.filter((a) => a.type === "BANK").map((a) => a.name),
+        );
         for (const account of accounts.filter((a) => a.type === "CREDIT")) {
           await syncAccount(
             client,
@@ -195,6 +205,7 @@ export async function syncPluggyCards(): Promise<{
             account,
             from,
             categoryNames,
+            openBillSource,
           );
         }
         results.push({
