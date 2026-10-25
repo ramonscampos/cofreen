@@ -61,7 +61,14 @@ interface BuildCardBillViewInput {
 
 const MONEY_TOLERANCE = 0.01;
 const RECURRING_TOLERANCE = 0.1;
+const RECURRING_DAY_TOLERANCE = 4;
+const RECURRING_BILLS = 3;
+const NAMED_SUBSCRIPTION_MONTHS = 2;
+const SUBSCRIPTION_NAME =
+  /\b(sub|subs|subscr|subscription|assinatura|mensalidade)\b/i;
 const FALLBACK_CATEGORY = "Outros";
+// "Loja 3/12" or "Loja - Parcela 3/12", as banks name installment charges
+const INSTALLMENT_SUFFIX = /\s*(-\s*)?(parcela\s*)?\d{1,2}\/\d{1,2}\s*$/i;
 const ADJUSTMENT_DESCRIPTION = "Saldo anterior e ajustes";
 const ADJUSTMENT_CATEGORY = "Ajustes";
 
@@ -88,7 +95,9 @@ function toPurchase(
 ): CardPurchaseView {
   return {
     id: tx.id,
-    description: tx.description,
+    description: isInstallment(tx)
+      ? tx.description.replace(INSTALLMENT_SUFFIX, "")
+      : tx.description,
     date: tx.purchaseDate,
     amount: Number(tx.amount),
     category: tx.category ?? FALLBACK_CATEGORY,
@@ -161,35 +170,52 @@ function projectInstallments(
   });
 }
 
-// Non-installment charges present in both of the last two closed bills
+const dayOfMonth = (tx: CardTransaction) =>
+  tx.purchaseDate ? Number(tx.purchaseDate.slice(8, 10)) : null;
+
+function isSameCharge(a: CardTransaction, b: CardTransaction): boolean {
+  const dayA = dayOfMonth(a);
+  const dayB = dayOfMonth(b);
+  if (dayA === null || dayB === null) return false;
+  const dayGap = Math.abs(dayA - dayB);
+  const amountA = Number(a.amount);
+  return (
+    normalizeDescription(a.description) ===
+      normalizeDescription(b.description) &&
+    Math.abs(Number(b.amount) - amountA) <= amountA * RECURRING_TOLERANCE &&
+    Math.min(dayGap, 31 - dayGap) <= RECURRING_DAY_TOLERANCE
+  );
+}
+
+// A subscription charges the same amount around the same day in each of the
+// last closed bills; frequent purchases at one store vary in day and value
 function projectRecurring(
   bills: CardBill[],
   transactions: CardTransaction[],
   monthRef: string,
 ): CardPurchaseView[] {
-  const [latest, previous] = bills
+  const recentBills = bills
     .filter((bill) => bill.monthRef < monthRef)
-    .sort((a, b) => b.monthRef.localeCompare(a.monthRef));
-  if (!latest || !previous) return [];
+    .sort((a, b) => b.monthRef.localeCompare(a.monthRef))
+    .slice(0, RECURRING_BILLS);
+  if (recentBills.length < RECURRING_BILLS) return [];
 
   const charges = (month: string) =>
     transactions.filter(
       (tx) =>
         tx.monthRef === month && !isInstallment(tx) && Number(tx.amount) > 0,
     );
-  const previousCharges = charges(previous.monthRef);
-  const seen = new Set<string>();
+  const [latest, ...previous] = recentBills.map((bill) =>
+    charges(bill.monthRef),
+  );
+  const used = new Set<string>();
 
-  return charges(latest.monthRef).flatMap((tx) => {
-    const key = normalizeDescription(tx.description);
-    const amount = Number(tx.amount);
-    const match = previousCharges.some(
-      (prev) =>
-        normalizeDescription(prev.description) === key &&
-        Math.abs(Number(prev.amount) - amount) <= amount * RECURRING_TOLERANCE,
+  return latest.flatMap((tx) => {
+    const matches = previous.map((bill) =>
+      bill.find((prev) => !used.has(prev.id) && isSameCharge(tx, prev)),
     );
-    if (!match || seen.has(key)) return [];
-    seen.add(key);
+    if (matches.some((match) => !match)) return [];
+    for (const match of matches) used.add((match as CardTransaction).id);
     return [
       {
         ...toPurchase(tx, true),
@@ -198,6 +224,49 @@ function projectRecurring(
       },
     ];
   });
+}
+
+// Charges whose name says subscription are projected from the first bill they
+// show up in, before the three-bill pattern can be seen
+function projectNamedSubscriptions(
+  transactions: CardTransaction[],
+  monthRef: string,
+  alreadyProjected: CardPurchaseView[],
+): CardPurchaseView[] {
+  const recentMonths = [
+    ...new Set(
+      transactions
+        .filter((tx) => tx.monthRef < monthRef)
+        .map((tx) => tx.monthRef),
+    ),
+  ]
+    .sort()
+    .slice(-NAMED_SUBSCRIPTION_MONTHS);
+  const seen = new Set(
+    alreadyProjected.map((p) => normalizeDescription(p.description)),
+  );
+
+  return transactions
+    .filter(
+      (tx) =>
+        recentMonths.includes(tx.monthRef) &&
+        !isInstallment(tx) &&
+        Number(tx.amount) > 0 &&
+        SUBSCRIPTION_NAME.test(tx.description),
+    )
+    .sort((a, b) => b.monthRef.localeCompare(a.monthRef))
+    .flatMap((tx) => {
+      const key = normalizeDescription(tx.description);
+      if (seen.has(key)) return [];
+      seen.add(key);
+      return [
+        {
+          ...toPurchase(tx, true),
+          id: `${tx.id}-forecast-${monthRef}`,
+          date: null,
+        },
+      ];
+    });
 }
 
 export function buildCardBillView({
@@ -295,10 +364,12 @@ export function buildCardBillView({
     };
   }
 
+  const recurring = projectRecurring(cardBills, cardTransactions, monthRef);
   const purchases = [
     ...monthPurchases,
     ...projectInstallments(cardTransactions, monthRef),
-    ...projectRecurring(cardBills, cardTransactions, monthRef),
+    ...recurring,
+    ...projectNamedSubscriptions(cardTransactions, monthRef, recurring),
   ];
   return {
     ...empty,

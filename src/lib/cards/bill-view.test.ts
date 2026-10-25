@@ -233,9 +233,19 @@ describe("open bill from card balance", () => {
 
 describe("forecast", () => {
   const history = [
+    bill({ monthRef: "2026-08" }),
     bill({ monthRef: "2026-09" }),
     bill({ monthRef: "2026-10" }),
   ];
+  const monthly = (description: string, amounts: string[], day = "18") =>
+    ["2026-08", "2026-09", "2026-10"].map((monthRef, index) =>
+      tx({
+        monthRef,
+        description,
+        amount: amounts[index],
+        purchaseDate: `${monthRef}-${day}`,
+      }),
+    );
   const tv = (monthRef: string, current: number) =>
     tx({
       monthRef,
@@ -314,8 +324,7 @@ describe("forecast", () => {
         purchaseDate: "2026-10-09",
       });
     const transactions = [
-      tx({ monthRef: "2026-09", description: "Netflix", amount: "55.90" }),
-      tx({ monthRef: "2026-10", description: "Netflix", amount: "55.90" }),
+      ...monthly("Netflix", ["55.90", "55.90", "55.90"]),
       htm("2026-11", 1),
       htm("2026-12", 2),
     ];
@@ -358,33 +367,107 @@ describe("forecast", () => {
     ).toMatchObject([{ installmentCurrent: 3, isForecast: true }]);
   });
 
-  it("includes recurring seen in last 2 closed bills within 10%", () => {
-    const transactions = [
-      tx({
-        monthRef: "2026-09",
-        description: "Netflix.com 1234",
-        amount: "55.90",
-      }),
-      tx({
-        monthRef: "2026-10",
-        description: "NETFLIX.COM 9876",
-        amount: "59.90",
-      }),
-      tx({ monthRef: "2026-10", description: "Uber *Trip", amount: "30" }),
-      tx({ monthRef: "2026-09", description: "Adobe", amount: "80" }),
-      tx({ monthRef: "2026-10", description: "Adobe", amount: "120" }),
-      tx({ monthRef: "2026-11", description: "Mercado", amount: "200" }),
-    ];
-    const dec = buildCardBillView({
+  const forecastFor = (transactions: CardTransaction[]) =>
+    buildCardBillView({
       card,
       bills: history,
       transactions,
       monthRef: "2026-12",
       today,
-    });
-    expect(dec.purchases.map((p) => [p.description, p.amount])).toEqual([
-      ["NETFLIX.COM 9876", 59.9],
+    }).purchases.map((p) => [p.description, p.amount]);
+
+  it("includes a charge on the same day in each of the last 3 bills", () => {
+    expect(
+      forecastFor([
+        ...monthly("Netflix.com 1234", ["55.90", "55.90", "59.90"]),
+        tx({ monthRef: "2026-11", description: "Mercado", amount: "200" }),
+      ]),
+    ).toEqual([["Netflix.com 1234", 59.9]]);
+  });
+
+  it("keeps several subscriptions from the same merchant apart", () => {
+    expect(
+      forecastFor([
+        ...monthly("Apple.Com/Bill", ["19.90", "19.90", "19.90"], "08"),
+        ...monthly("Apple.Com/Bill", ["53.90", "53.90", "53.90"], "06"),
+      ]),
+    ).toEqual([
+      ["Apple.Com/Bill", 19.9],
+      ["Apple.Com/Bill", 53.9],
     ]);
+  });
+
+  it("projects a charge named as a subscription after its first bill", () => {
+    expect(
+      forecastFor([
+        tx({
+          monthRef: "2026-11",
+          description: "ANTHROPIC* CLAUDE SUB",
+          amount: "556.30",
+          purchaseDate: "2026-10-07",
+        }),
+        tx({
+          monthRef: "2026-11",
+          description: "Loja Qualquer",
+          amount: "80",
+          purchaseDate: "2026-10-07",
+        }),
+      ]),
+    ).toEqual([["ANTHROPIC* CLAUDE SUB", 556.3]]);
+  });
+
+  it("does not project a named subscription twice", () => {
+    expect(
+      forecastFor([
+        ...monthly("Openai *Chatgpt Subscr", ["20", "20", "20"]),
+        tx({
+          monthRef: "2026-11",
+          description: "Openai *Chatgpt Subscr",
+          amount: "20",
+          purchaseDate: "2026-11-18",
+        }),
+      ]),
+    ).toEqual([["Openai *Chatgpt Subscr", 20]]);
+  });
+
+  it("ignores frequent purchases at the same store", () => {
+    const store = (monthRef: string, day: string, amount: string) =>
+      tx({
+        monthRef,
+        description: "SUPERMERCADOS BH",
+        amount,
+        purchaseDate: `${monthRef}-${day}`,
+      });
+    expect(
+      forecastFor([
+        store("2026-08", "03", "120.00"),
+        store("2026-08", "21", "300.00"),
+        store("2026-09", "12", "125.00"),
+        store("2026-09", "25", "36.95"),
+        store("2026-10", "27", "118.00"),
+        store("2026-10", "06", "140.78"),
+      ]),
+    ).toEqual([]);
+  });
+
+  it("ignores charges missing from one of the last 3 bills or off in value", () => {
+    expect(
+      forecastFor([
+        ...monthly("Adobe", ["80", "80", "120"]),
+        tx({
+          monthRef: "2026-09",
+          description: "Uber",
+          amount: "30",
+          purchaseDate: "2026-09-18",
+        }),
+        tx({
+          monthRef: "2026-10",
+          description: "Uber",
+          amount: "30",
+          purchaseDate: "2026-10-18",
+        }),
+      ]),
+    ).toEqual([]);
   });
 });
 
@@ -410,6 +493,35 @@ describe("empty", () => {
     });
     expect(view.status).toBe("empty");
     expect(view.categories).toEqual([]);
+  });
+});
+
+describe("purchase descriptions", () => {
+  it("drops the installment suffix the bank adds to the name", () => {
+    const view = buildCardBillView({
+      card,
+      bills: [],
+      transactions: [
+        tx({
+          description: "Htm *Tiagolemosia 3/12",
+          installmentCurrent: 3,
+          installmentTotal: 12,
+        }),
+        tx({
+          description: "Bahamas 0000 M - Parcela 3/3",
+          installmentCurrent: 3,
+          installmentTotal: 3,
+        }),
+        tx({ description: "Loja 24/7" }),
+      ],
+      monthRef: "2026-11",
+      today,
+    });
+    expect(view.purchases.map((p) => p.description).sort()).toEqual([
+      "Bahamas 0000 M",
+      "Htm *Tiagolemosia",
+      "Loja 24/7",
+    ]);
   });
 });
 
