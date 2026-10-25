@@ -8,6 +8,7 @@ import {
   type CardBillStatus,
   type CardBillView,
 } from "@/lib/cards/bill-view";
+import type { CategoryGroup } from "@/lib/cards/category-groups";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { CardPurchaseList } from "./card-purchase-list";
@@ -28,6 +29,8 @@ interface CardBillItemProps {
 
 export function CardBillItem({ bill }: CardBillItemProps) {
   const [expanded, setExpanded] = useState(false);
+  const [selectedCategory, setSelectedCategory] =
+    useState<CategoryGroup | null>(null);
   const isEmpty = bill.status === "empty";
   const dueDay = bill.dueDate
     ? format(parse(bill.dueDate, "yyyy-MM-dd", new Date()), "dd")
@@ -90,8 +93,16 @@ export function CardBillItem({ bill }: CardBillItemProps) {
 
       {expanded && !isEmpty && (
         <div className="border-t border-zinc-700 p-4 space-y-6">
-          <CategoryChart categories={bill.categories} color={bill.card.color} />
-          <CardPurchaseList purchases={bill.purchases} />
+          <CategoryChart
+            categories={bill.categories}
+            color={bill.card.color}
+            selected={selectedCategory}
+            onSelect={setSelectedCategory}
+          />
+          <CardPurchaseList
+            purchases={bill.purchases}
+            highlight={selectedCategory?.members ?? null}
+          />
         </div>
       )}
     </div>

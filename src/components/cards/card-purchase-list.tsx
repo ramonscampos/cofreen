@@ -5,12 +5,17 @@ import { cn } from "@/lib/utils";
 
 interface CardPurchaseListProps {
   purchases: CardPurchaseView[];
+  // Categories picked in the chart; others are dimmed
+  highlight?: string[] | null;
 }
 
 const formatDay = (date: string | null) =>
   date ? format(parse(date, "yyyy-MM-dd", new Date()), "dd/MM") : "-";
 
-export function CardPurchaseList({ purchases }: CardPurchaseListProps) {
+export function CardPurchaseList({
+  purchases,
+  highlight = null,
+}: CardPurchaseListProps) {
   if (purchases.length === 0) {
     return (
       <p className="text-sm text-zinc-500">Nenhuma compra nesta fatura.</p>
@@ -30,8 +35,12 @@ export function CardPurchaseList({ purchases }: CardPurchaseListProps) {
           <li
             key={purchase.id}
             className={cn(
-              "grid grid-cols-[4fr_1fr_2fr_2fr] gap-4 px-2 py-2 items-center",
+              "grid grid-cols-[4fr_1fr_2fr_2fr] gap-4 px-2 py-2 items-center rounded transition-opacity",
               purchase.isForecast && "text-zinc-500",
+              highlight &&
+                (highlight.includes(purchase.category)
+                  ? "bg-zinc-800/70"
+                  : "opacity-30"),
             )}
           >
             <span className="flex items-center gap-2 overflow-hidden">
