@@ -2,6 +2,7 @@ import { format, subMonths } from "date-fns";
 import { and, eq, gte, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  balances,
   cardBills,
   cards,
   cardTransactions,
@@ -26,6 +27,7 @@ export async function getMonthData(userId: string, monthRef: string) {
     cardBillsRes,
     cardTransactionsRes,
     syncStatusRes,
+    balancesRes,
   ] = await Promise.all([
     db
       .select()
@@ -60,6 +62,7 @@ export async function getMonthData(userId: string, monthRef: string) {
         ),
       ),
     db.select().from(syncStatus).where(eq(syncStatus.id, "pluggy")),
+    db.select().from(balances).where(eq(balances.userId, userId)),
   ]);
 
   return {
@@ -69,6 +72,7 @@ export async function getMonthData(userId: string, monthRef: string) {
     cardBills: cardBillsRes,
     cardTransactions: cardTransactionsRes,
     syncStatus: syncStatusRes.at(0) ?? null,
+    balances: balancesRes,
   };
 }
 

@@ -3,12 +3,14 @@ import { format, startOfMonth, subMonths } from "date-fns";
 import { and, eq, gte, notInArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
+  balances,
   cardBills,
   cards,
   cardTransactions,
   syncStatus,
   users,
 } from "@/db/schema";
+import { institutionLabel, mapBankAccounts, mapInvestments } from "./balances";
 import { createPluggyClient, type PluggyClient } from "./client";
 import {
   deriveCardDays,
@@ -36,6 +38,49 @@ async function resolveUserId(): Promise<string> {
     .where(eq(sql`lower(${users.email})`, email.toLowerCase()));
   if (!user) throw new Error("Usuário do ALLOWED_EMAIL não encontrado");
   return user.id;
+}
+
+async function syncBalances(
+  client: PluggyClient,
+  userId: string,
+  itemId: string,
+  accounts: PluggyAccount[],
+) {
+  const institution = institutionLabel(
+    accounts.filter((a) => a.type === "BANK").map((a) => a.name),
+    accounts.find((a) => a.taxNumber)?.taxNumber,
+  );
+  const rows = [
+    ...mapBankAccounts(accounts, institution),
+    ...mapInvestments(await client.listInvestments(itemId), institution),
+  ];
+  if (rows.length > 0) {
+    await db
+      .insert(balances)
+      .values(rows.map((row) => ({ ...row, userId, pluggyItemId: itemId })))
+      .onConflictDoUpdate({
+        target: balances.externalId,
+        set: {
+          institution: sql`excluded.institution`,
+          name: sql`excluded.name`,
+          amount: sql`excluded.amount`,
+          updatedAt: sql`now()`,
+        },
+      });
+  }
+
+  // Withdrawn investments and closed accounts drop out of the item
+  const keepIds = planStalePrune(rows.map((row) => row.externalId));
+  if (keepIds) {
+    await db
+      .delete(balances)
+      .where(
+        and(
+          eq(balances.pluggyItemId, itemId),
+          notInArray(balances.externalId, keepIds),
+        ),
+      );
+  }
 }
 
 async function syncAccount(
@@ -194,6 +239,7 @@ export async function syncPluggyCards(): Promise<{
           continue;
         }
         const accounts = await client.listAccounts(itemId);
+        await syncBalances(client, userId, itemId, accounts);
         const openBillSource = detectOpenBillSource(
           accounts.filter((a) => a.type === "BANK").map((a) => a.name),
         );

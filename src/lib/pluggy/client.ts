@@ -4,6 +4,7 @@ import type {
   PluggyAccount,
   PluggyBill,
   PluggyCategory,
+  PluggyInvestment,
   PluggyItem,
   PluggyPage,
   PluggyTransaction,
@@ -29,6 +30,7 @@ export interface PluggyClient {
     from: string,
   ): Promise<PluggyTransaction[]>;
   listCategoryNames(): Promise<Map<string, string>>;
+  listInvestments(itemId: string): Promise<PluggyInvestment[]>;
 }
 
 async function request<T>(
@@ -88,6 +90,8 @@ export async function createPluggyClient(): Promise<PluggyClient> {
         .results,
     listBills: (accountId) =>
       getAllPages<PluggyBill>(`/bills?accountId=${accountId}`),
+    listInvestments: (itemId) =>
+      getAllPages<PluggyInvestment>(`/investments?itemId=${itemId}`),
     listCategoryNames: async () => {
       const categories = await getAllPages<PluggyCategory>("/categories");
       return new Map(

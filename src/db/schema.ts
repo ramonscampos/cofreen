@@ -182,6 +182,23 @@ export const cardBills = pgTable("card_bills", {
     .defaultNow(),
 });
 
+// Bank account balances and active investments, as of the last sync
+export const balances = pgTable("balances", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  externalId: text("external_id").notNull().unique(),
+  pluggyItemId: text("pluggy_item_id").notNull(),
+  kind: text("kind", { enum: ["account", "investment"] }).notNull(),
+  institution: text("institution").notNull(),
+  name: text("name").notNull(),
+  amount: numeric("amount").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" })
+    .notNull()
+    .defaultNow(),
+});
+
 export const syncStatus = pgTable("sync_status", {
   id: text("id").primaryKey(), // Always "pluggy"
   lastSuccessAt: timestamp("last_success_at", {

@@ -69,6 +69,7 @@ const data: MonthData = {
   ],
   cardTransactions: [],
   syncStatus: null,
+  balances: [],
 };
 
 describe("buildMonthView", () => {

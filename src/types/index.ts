@@ -1,5 +1,6 @@
 import type { InferSelectModel } from "drizzle-orm";
 import type {
+  balances,
   cardBills,
   cards,
   cardTransactions,
@@ -52,6 +53,8 @@ export type CardTransaction = InferSelectModel<typeof cardTransactions>;
 export type CardBill = InferSelectModel<typeof cardBills>;
 
 export type SyncStatus = InferSelectModel<typeof syncStatus>;
+
+export type Balance = InferSelectModel<typeof balances>;
 
 // Helper type for the unified list view
 export interface DashboardItem {

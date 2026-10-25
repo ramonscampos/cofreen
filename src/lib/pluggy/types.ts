@@ -8,8 +8,10 @@ export interface PluggyItem {
 export interface PluggyAccount {
   id: string;
   type: "BANK" | "CREDIT";
+  subtype?: string | null;
   name: string;
   balance: number;
+  taxNumber?: string | null;
   marketingName?: string | null;
   number?: string | null;
   creditData?: { balanceDueDate?: string | null } | null;
@@ -38,6 +40,14 @@ export interface PluggyTransaction {
     billForecastDate?: string | null;
     purchaseDate?: string | null;
   } | null;
+}
+
+export interface PluggyInvestment {
+  id: string;
+  name: string;
+  type: string;
+  balance: number;
+  status?: string | null;
 }
 
 export interface PluggyCategory {

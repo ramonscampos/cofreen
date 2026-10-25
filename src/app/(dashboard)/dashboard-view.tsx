@@ -22,6 +22,7 @@ interface DashboardViewProps {
 
 import { ChevronRight, Layers, List } from "lucide-react";
 import { CardBillsSection } from "@/components/cards/card-bills-section";
+import { BalanceCards } from "@/components/dashboard/balance-cards";
 import { ExpenseModal } from "@/components/dashboard/expense-modal";
 import { IncomeModal } from "@/components/dashboard/income-modal";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
@@ -134,6 +135,8 @@ export function DashboardView({
 
   return (
     <div className="space-y-8 relative z-10">
+      <BalanceCards balances={monthData.balances} />
+
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <Button
