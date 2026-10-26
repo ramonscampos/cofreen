@@ -1,13 +1,17 @@
 "use client";
 
 import { parse } from "date-fns";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { TransactionList } from "@/components/dashboard/transaction-list";
 import { Button } from "@/components/ui/button";
+import { useMonthData } from "@/hooks/use-month-data";
 import { triggerTransactionUpdate } from "@/lib/events";
-import { buildPaidTemplateTransaction } from "@/lib/finance-logic";
+import {
+  buildPaidTemplateTransaction,
+  normalizeMonthRef,
+} from "@/lib/finance-logic";
 import type { MonthData } from "@/lib/month-data";
 import { buildMonthView } from "@/lib/month-view";
 import { cn } from "@/lib/utils";
@@ -15,7 +19,8 @@ import type { ActionResult, DashboardItem, Kind } from "@/types";
 
 interface DashboardViewProps {
   initialMonthRef: string;
-  monthData: MonthData;
+  // Server-rendered data for the first month; later months come from the cache
+  initialMonthData: MonthData;
   // yyyy-MM-dd computed on the server so both renders agree
   today: string;
 }
@@ -23,16 +28,26 @@ interface DashboardViewProps {
 import { ChevronRight, Layers, List } from "lucide-react";
 import { CardBillsSection } from "@/components/cards/card-bills-section";
 import { BalanceCards } from "@/components/dashboard/balance-cards";
+import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 import { ExpenseModal } from "@/components/dashboard/expense-modal";
 import { IncomeModal } from "@/components/dashboard/income-modal";
 import { ConfirmationModal } from "@/components/ui/confirmation-modal";
 
 export function DashboardView({
   initialMonthRef,
-  monthData,
+  initialMonthData,
   today,
 }: DashboardViewProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const monthRef = normalizeMonthRef(
+    searchParams.get("month"),
+    initialMonthRef,
+  );
+  const { data: monthData } = useMonthData(
+    monthRef,
+    monthRef === initialMonthRef ? initialMonthData : undefined,
+  );
 
   const [modalOpen, setModalOpen] = useState(false);
   const [modalKind, setModalKind] = useState<Kind>("incoming");
@@ -44,14 +59,16 @@ export function DashboardView({
   // Grouped keeps incomes apart from expenses
   const [viewMode, setViewMode] = useState<"mixed" | "grouped">("grouped");
 
-  const { items, cardBills } = useMemo(
+  const view = useMemo(
     () =>
-      buildMonthView(
-        monthData,
-        initialMonthRef,
-        parse(today, "yyyy-MM-dd", new Date()),
-      ),
-    [monthData, initialMonthRef, today],
+      monthData
+        ? buildMonthView(
+            monthData,
+            monthRef,
+            parse(today, "yyyy-MM-dd", new Date()),
+          )
+        : null,
+    [monthData, monthRef, today],
   );
 
   const openNewModal = (kind: Kind) => {
@@ -94,7 +111,6 @@ export function DashboardView({
       toast.success("Item removido com sucesso");
       triggerTransactionUpdate();
       setConfirmationOpen(false);
-      router.refresh();
     } else {
       toast.error(result.error || "Erro ao remover item");
     }
@@ -102,11 +118,10 @@ export function DashboardView({
 
   const handleDefer = async (item: DashboardItem) => {
     const { deferBillAction } = await import("@/app/actions/transactions");
-    const result = await deferBillAction(item, initialMonthRef);
+    const result = await deferBillAction(item, monthRef);
     if (result.success) {
       toast.success("Conta adiada para o próximo mês");
       triggerTransactionUpdate();
-      router.refresh();
     } else {
       toast.error(result.error || "Erro ao adiar conta");
     }
@@ -119,7 +134,6 @@ export function DashboardView({
     if (result.success) {
       toast.success("Adiamento desfeito");
       triggerTransactionUpdate();
-      router.refresh();
     } else {
       toast.error(result.error || "Erro ao desfazer adiamento");
     }
@@ -133,13 +147,12 @@ export function DashboardView({
     if (item.originalTemplateId && !item.transactionId && !item.paid) {
       // It's a template projection being paid. Create it as a real Transaction.
       const result = await createTransactionAction(
-        buildPaidTemplateTransaction(item, initialMonthRef),
+        buildPaidTemplateTransaction(item, monthRef),
       );
 
       if (result.success) {
         toast.success("Transação recorrente paga!");
         triggerTransactionUpdate();
-        router.refresh();
       } else {
         toast.error("Erro ao processar transação recorrente");
       }
@@ -154,15 +167,17 @@ export function DashboardView({
     if (result.success) {
       toast.success(item.paid ? "Marcado como não pago" : "Marcado como pago");
       triggerTransactionUpdate();
-      router.refresh();
     } else {
       toast.error("Erro ao atualizar status");
     }
   };
 
+  if (!view) return <DashboardSkeleton />;
+  const { items, cardBills } = view;
+
   return (
     <div className="space-y-8 relative z-10">
-      <BalanceCards balances={monthData.balances} />
+      <BalanceCards balances={monthData?.balances ?? []} />
 
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -223,7 +238,10 @@ export function DashboardView({
         </div>
       </div>
 
-      <CardBillsSection bills={cardBills} syncStatus={monthData.syncStatus} />
+      <CardBillsSection
+        bills={cardBills}
+        syncStatus={monthData?.syncStatus ?? null}
+      />
 
       <div className="grid gap-2">
         <h2 className="sr-only">Transações</h2>
@@ -241,14 +259,14 @@ export function DashboardView({
       <IncomeModal
         isOpen={modalOpen && modalKind === "incoming"}
         onClose={() => setModalOpen(false)}
-        defaultMonthRef={initialMonthRef}
+        defaultMonthRef={monthRef}
         initialData={editingItem}
       />
 
       <ExpenseModal
         isOpen={modalOpen && modalKind === "expense"}
         onClose={() => setModalOpen(false)}
-        monthRef={initialMonthRef}
+        monthRef={monthRef}
         initialData={editingItem}
       />
 

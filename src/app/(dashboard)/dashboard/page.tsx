@@ -32,7 +32,7 @@ export default async function DashboardPage({
   return (
     <DashboardView
       initialMonthRef={monthRef}
-      monthData={monthData}
+      initialMonthData={monthData}
       today={getTodayInSaoPaulo()}
     />
   );

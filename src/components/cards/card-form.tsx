@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { updateCardAction } from "@/app/actions/cards";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { triggerTransactionUpdate } from "@/lib/events";
 
 import type { Card } from "@/types";
 
@@ -48,6 +49,7 @@ export function CardForm({ card, onClose }: CardFormProps) {
 
     if (result.success) {
       toast.success("Cartão salvo com sucesso!");
+      triggerTransactionUpdate();
       onClose();
     } else {
       toast.error(result.error || "Erro ao salvar cartão");

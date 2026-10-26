@@ -3,7 +3,6 @@
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { RefreshCw } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { syncCardsAction } from "@/app/actions/sync";
@@ -17,7 +16,6 @@ interface SyncStatusBarProps {
 }
 
 export function SyncStatusBar({ status }: SyncStatusBarProps) {
-  const router = useRouter();
   const [syncing, setSyncing] = useState(false);
 
   const autoSyncStarted = useRef(false);
@@ -31,9 +29,8 @@ export function SyncStatusBar({ status }: SyncStatusBarProps) {
       setSyncing(false);
       if (result.success && result.data?.skipped) return;
       triggerTransactionUpdate();
-      router.refresh();
     });
-  }, [router]);
+  }, []);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -45,7 +42,6 @@ export function SyncStatusBar({ status }: SyncStatusBarProps) {
       toast.error(result.error || "Erro ao sincronizar");
     }
     triggerTransactionUpdate();
-    router.refresh();
   };
 
   const lastSuccess = status?.lastSuccessAt

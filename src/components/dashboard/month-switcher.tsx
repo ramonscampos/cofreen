@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   formatMonthDisplay,
@@ -14,18 +14,14 @@ interface MonthSwitcherProps {
 }
 
 export function MonthSwitcher({ monthRef }: MonthSwitcherProps) {
-  const router = useRouter();
   const pathname = usePathname();
 
-  const handlePrev = () => {
-    const prev = getPreviousMonthRef(monthRef);
-    router.push(`${pathname}?month=${prev}`);
-  };
-
-  const handleNext = () => {
-    const next = getNextMonthRef(monthRef);
-    router.push(`${pathname}?month=${next}`);
-  };
+  // Only the URL changes; month data comes from the client cache, so there
+  // is no server render on every switch
+  const goTo = (month: string) =>
+    window.history.pushState(null, "", `${pathname}?month=${month}`);
+  const handlePrev = () => goTo(getPreviousMonthRef(monthRef));
+  const handleNext = () => goTo(getNextMonthRef(monthRef));
 
   return (
     <div className="flex items-center gap-2 text-gray-6">

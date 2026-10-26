@@ -1,7 +1,6 @@
 "use client";
 
 import { format, isValid, parse } from "date-fns";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -33,7 +32,6 @@ export function IncomeModal({
   defaultMonthRef,
   initialData,
 }: IncomeModalProps) {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   const [description, setDescription] = useState("");
@@ -146,7 +144,6 @@ export function IncomeModal({
         initialData ? "Entrada atualizada!" : "Entrada cadastrada!",
       );
       triggerTransactionUpdate();
-      router.refresh();
       onClose();
     } else {
       toast.error(result.error || "Erro ao salvar entrada");

@@ -4,20 +4,17 @@ import { parse } from "date-fns";
 import { LogOut, User } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
-import { useEffect, useMemo, useState } from "react";
-import { getDashboardSummaryAction } from "@/app/actions/dashboard";
+import { useMemo, useState } from "react";
 import { MonthSwitcher } from "@/components/dashboard/month-switcher";
 import { SummaryCards } from "@/components/dashboard/summary-cards";
+import { useMonthData } from "@/hooks/use-month-data";
 import { getTodayInSaoPaulo } from "@/lib/dates";
-import { TRANSACTION_UPDATED_EVENT } from "@/lib/events";
 import { getCurrentMonthRef, normalizeMonthRef } from "@/lib/finance-logic";
-import type { MonthData } from "@/lib/month-data";
 import { buildMonthView } from "@/lib/month-view";
 
 export function Header() {
-  const _router = useRouter();
   const searchParams = useSearchParams();
   const monthRef = normalizeMonthRef(
     searchParams.get("month"),
@@ -28,36 +25,11 @@ export function Header() {
   const user = session?.user;
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Data state for Summary Cards
-  const [monthData, setMonthData] = useState<MonthData | null>(null);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      if (user) {
-        const result = await getDashboardSummaryAction(monthRef);
-        if (result.success && result.data) {
-          setMonthData(result.data);
-        }
-      }
-    };
-
-    fetchData();
-
-    // Listen for updates
-    const handleUpdate = () => fetchData();
-    if (typeof window !== "undefined") {
-      window.addEventListener(TRANSACTION_UPDATED_EVENT, handleUpdate);
-    }
-
-    return () => {
-      if (typeof window !== "undefined") {
-        window.removeEventListener(TRANSACTION_UPDATED_EVENT, handleUpdate);
-      }
-    };
-  }, [user, monthRef]); // Re-fetch when month changes
+  // Shares the month cache with the dashboard list
+  const { data: monthData } = useMonthData(monthRef);
 
   const totals = useMemo(() => {
-    if (!monthData) return { incoming: 0, expense: 0, total: 0 };
+    if (!monthData) return null;
     // Same "today" as the dashboard list
     const today = parse(getTodayInSaoPaulo(), "yyyy-MM-dd", new Date());
     return buildMonthView(monthData, monthRef, today).totals;
@@ -141,11 +113,7 @@ export function Header() {
           </div>
         </div>
 
-        <SummaryCards
-          incoming={totals.incoming}
-          expense={totals.expense}
-          total={totals.total}
-        />
+        <SummaryCards totals={totals} />
       </div>
     </header>
   );

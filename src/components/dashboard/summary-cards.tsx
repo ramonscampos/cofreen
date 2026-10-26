@@ -1,14 +1,23 @@
 import { ArrowDownCircle, ArrowUpCircle, DollarSign } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { MonthTotals } from "@/lib/finance-logic";
 import { formatCurrency } from "@/lib/format";
 
 interface SummaryCardsProps {
-  incoming: number;
-  expense: number;
-  total: number;
+  // null while the month is loading
+  totals: MonthTotals | null;
 }
 
-export function SummaryCards({ incoming, expense, total }: SummaryCardsProps) {
+function Amount({ value }: { value: number | undefined }) {
+  return value === undefined ? (
+    <Skeleton className="h-9 w-44" />
+  ) : (
+    formatCurrency(value)
+  );
+}
+
+export function SummaryCards({ totals }: SummaryCardsProps) {
   return (
     <div className="grid gap-8 md:grid-cols-3 top-16 -mt-16 relative">
       <Card className="bg-[#323238] border-none text-white">
@@ -20,7 +29,7 @@ export function SummaryCards({ incoming, expense, total }: SummaryCardsProps) {
         </CardHeader>
         <CardContent>
           <div className="text-3xl font-bold text-white mt-4">
-            {formatCurrency(incoming)}
+            <Amount value={totals?.incoming} />
           </div>
         </CardContent>
       </Card>
@@ -34,7 +43,7 @@ export function SummaryCards({ incoming, expense, total }: SummaryCardsProps) {
         </CardHeader>
         <CardContent>
           <div className="text-3xl font-bold text-white mt-4">
-            {formatCurrency(expense)}
+            <Amount value={totals?.expense} />
           </div>
         </CardContent>
       </Card>
@@ -48,7 +57,7 @@ export function SummaryCards({ incoming, expense, total }: SummaryCardsProps) {
         </CardHeader>
         <CardContent>
           <div className="text-3xl font-bold text-white mt-4">
-            {formatCurrency(total)}
+            <Amount value={totals?.total} />
           </div>
         </CardContent>
       </Card>
