@@ -52,9 +52,8 @@ export function IncomeModal({
         setAmount(initialData.amount?.toString() || "");
         setIsRecurring(initialData.isRecurring || false);
 
-        if (initialData.day) {
-          setDay(initialData.day.toString());
-        }
+        // Never carry over the day from the last time the modal was open
+        setDay(String(initialData.day ?? new Date().getDate()));
         const ref = initialData.monthRef || defaultMonthRef;
 
         if (ref) {
@@ -229,11 +228,11 @@ export function IncomeModal({
             </label>
             <Input
               id="income-day"
-              type="number"
-              min="1"
-              max="31"
+              type="text"
+              inputMode="numeric"
+              maxLength={2}
               value={day}
-              onChange={(e) => setDay(e.target.value)}
+              onChange={(e) => setDay(e.target.value.replace(/\D/g, ""))}
               required
               className="bg-gray-1 border-none text-white h-10 w-20"
             />

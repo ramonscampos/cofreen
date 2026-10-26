@@ -110,6 +110,7 @@ export function mergeTransactionsAndTemplates(
       paid: !!t.paid,
       isRecurring: !!t.isRecurring,
       transactionId: t.id,
+      monthRef: t.monthRef,
       originalTemplateId: t.templateId ?? undefined,
       // Dates come as "yyyy-MM-dd hh:mm:ss+00"; read the day directly
       day: Number((t.transactionDate ?? t.createdAt).slice(8, 10)),

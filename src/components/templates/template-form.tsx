@@ -104,10 +104,10 @@ export function TemplateForm({ onClose, initialData }: TemplateFormProps) {
         </label>
         <Input
           id="template-amount"
-          type="number"
-          step="0.01"
+          type="text"
+          inputMode="decimal"
           value={amount}
-          onChange={(e) => setAmount(e.target.value)}
+          onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ""))}
           required
         />
       </div>
@@ -121,11 +121,11 @@ export function TemplateForm({ onClose, initialData }: TemplateFormProps) {
         </label>
         <Input
           id="template-day"
-          type="number"
-          min="1"
-          max="31"
+          type="text"
+          inputMode="numeric"
+          maxLength={2}
           value={day}
-          onChange={(e) => setDay(e.target.value)}
+          onChange={(e) => setDay(e.target.value.replace(/\D/g, ""))}
           required
         />
       </div>

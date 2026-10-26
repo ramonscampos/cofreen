@@ -58,6 +58,11 @@ export function ExpenseModal({
         setAmount(initialData.amount?.toString() || "");
 
         setIsRecurring(initialData.isRecurring || false);
+        // The modal stays mounted: a previous "Parcelada?" must not turn an
+        // edit into a new installment plan
+        setIsInstallment(false);
+        setInstallments("");
+        setInstallmentCurrent("1");
 
         if (initialData.day) {
           setDay(initialData.day.toString());
@@ -272,11 +277,11 @@ export function ExpenseModal({
             </label>
             <Input
               id="expense-day"
-              type="number"
-              min="1"
-              max="31"
+              type="text"
+              inputMode="numeric"
+              maxLength={2}
               value={day}
-              onChange={(e) => setDay(e.target.value)}
+              onChange={(e) => setDay(e.target.value.replace(/\D/g, ""))}
               className="bg-gray-1 border-none text-white h-10 w-16"
               placeholder="DD"
             />
@@ -302,6 +307,7 @@ export function ExpenseModal({
             </span>
             <Switch
               checked={isInstallment}
+              disabled={!!initialData}
               onCheckedChange={(checked) => {
                 setIsInstallment(checked);
                 if (checked) {
@@ -328,11 +334,13 @@ export function ExpenseModal({
               </label>
               <Input
                 id="expense-installment-current"
-                type="number"
-                min="1"
-                max="99"
+                type="text"
+                inputMode="numeric"
+                maxLength={2}
                 value={installmentCurrent}
-                onChange={(e) => setInstallmentCurrent(e.target.value)}
+                onChange={(e) =>
+                  setInstallmentCurrent(e.target.value.replace(/\D/g, ""))
+                }
                 disabled={!isInstallment}
                 className="bg-gray-1 border-none text-white w-14 h-10 disabled:opacity-50 flex-1"
               />
@@ -350,11 +358,13 @@ export function ExpenseModal({
               </label>
               <Input
                 id="expense-installments-total"
-                type="number"
-                min="2"
-                max="99"
+                type="text"
+                inputMode="numeric"
+                maxLength={2}
                 value={installments}
-                onChange={(e) => setInstallments(e.target.value)}
+                onChange={(e) =>
+                  setInstallments(e.target.value.replace(/\D/g, ""))
+                }
                 disabled={!isInstallment}
                 className="bg-gray-1 border-none text-white w-14 h-10 disabled:opacity-50 flex-1"
               />

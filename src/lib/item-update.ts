@@ -24,7 +24,7 @@ export type ItemUpdate =
       payload: {
         description: string;
         amount: string;
-        monthRef: string;
+        monthRef?: string;
         transactionDate: string;
       };
     };
@@ -46,14 +46,21 @@ export function buildItemUpdate(
       },
     };
   }
+  // Rows tied to a template or a deferral stay in their month, or the bill
+  // would reappear unpaid there (and deferral links would point nowhere)
+  const isLinked =
+    !!item.originalTemplateId ||
+    !!item.deferredToMonthRef ||
+    !!item.isDeferredCopy;
+  const monthRef = isLinked ? (item.monthRef ?? form.monthRef) : form.monthRef;
   return {
     target: "transaction",
     id: item.transactionId ?? item.id,
     payload: {
       description: form.description,
       amount: String(form.amount),
-      monthRef: form.monthRef,
-      transactionDate: dateInMonth(form.monthRef, form.day),
+      ...(isLinked ? {} : { monthRef }),
+      transactionDate: dateInMonth(monthRef, form.day),
     },
   };
 }

@@ -63,7 +63,7 @@ describe("buildItemUpdate", () => {
     expect(update.payload).not.toHaveProperty("monthRef");
   });
 
-  it("updates a real row in its month, capping the day", () => {
+  it("updates a real row, capping the day", () => {
     const tx: Transaction = {
       id: "tx-dentista",
       userId: "u",
@@ -95,6 +95,40 @@ describe("buildItemUpdate", () => {
         amount: "350",
         monthRef: "2026-11",
         transactionDate: "2026-11-30",
+      },
+    });
+  });
+
+  it("keeps a paid template row in its month so the link holds", () => {
+    const paid: Transaction = {
+      id: "tx-internet-oct",
+      userId: "u",
+      kind: "expense",
+      monthRef: "2026-10",
+      description: "Internet",
+      amount: "210",
+      paid: true,
+      isRecurring: true,
+      templateId: "internet",
+      installmentCurrent: null,
+      installmentTotal: null,
+      transactionDate: "2026-10-15 00:00:00+00",
+      createdAt: "2026-10-15 00:00:00+00",
+    };
+    const [item] = mergeTransactionsAndTemplates([paid], [], "2026-10");
+    const update = buildItemUpdate(item, {
+      description: "Internet",
+      amount: 220,
+      day: 16,
+      monthRef: "2026-11",
+    });
+    expect(update).toEqual({
+      target: "transaction",
+      id: "tx-internet-oct",
+      payload: {
+        description: "Internet",
+        amount: "220",
+        transactionDate: "2026-10-16",
       },
     });
   });
