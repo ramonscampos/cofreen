@@ -4,6 +4,7 @@ import {
   buildPaidTemplateTransaction,
   calculateTotals,
   mergeTransactionsAndTemplates,
+  normalizeMonthRef,
 } from "./finance-logic";
 
 const fastback: RecurringTemplate = {
@@ -58,5 +59,39 @@ describe("installment templates", () => {
     const items = mergeTransactionsAndTemplates([paid], [fastback], "2026-11");
     expect(items).toHaveLength(1);
     expect(calculateTotals(items).expense).toBe(2800);
+  });
+});
+
+describe("normalizeMonthRef", () => {
+  it("keeps a valid month", () => {
+    expect(normalizeMonthRef("2026-12", "2026-10")).toBe("2026-12");
+  });
+
+  it("falls back for malformed months", () => {
+    for (const value of ["foo", "2026-13", "2026-1", "", undefined]) {
+      expect(normalizeMonthRef(value, "2026-10")).toBe("2026-10");
+    }
+  });
+});
+
+describe("transaction day", () => {
+  it("reads the day from a database timestamp", () => {
+    const income: Transaction = {
+      id: "trs",
+      userId: "u",
+      kind: "incoming",
+      monthRef: "2026-11",
+      description: "TRS",
+      amount: "12000",
+      paid: true,
+      isRecurring: false,
+      templateId: null,
+      installmentCurrent: null,
+      installmentTotal: null,
+      transactionDate: "2026-10-25 00:00:00+00",
+      createdAt: "2026-10-25 22:59:13.958+00",
+    };
+    const [item] = mergeTransactionsAndTemplates([income], [], "2026-11");
+    expect(item.day).toBe(25);
   });
 });

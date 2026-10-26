@@ -50,6 +50,7 @@ describe("buildOverdueItems", () => {
       amount: 210,
       paid: false,
       overdueFromMonthRef: "2026-11",
+      overdueLabel: "Atrasada · nov",
       originalTemplateId: "tpl-internet",
     });
   });

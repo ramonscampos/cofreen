@@ -72,6 +72,7 @@ export interface DashboardItem {
   monthRef?: string;
   // Set on last month's unpaid expense repeated in the current month
   overdueFromMonthRef?: string;
+  overdueLabel?: string;
 }
 
 export interface User {

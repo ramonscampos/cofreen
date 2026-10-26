@@ -1,5 +1,3 @@
-import { format, parse } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { CheckCircle2, Pencil, Repeat, Trash2, Undo2 } from "lucide-react";
 import { getMonthlyAmount } from "@/lib/finance-logic";
 import { cn } from "@/lib/utils";
@@ -23,12 +21,10 @@ export function TransactionItem({
   onEdit,
 }: TransactionItemProps) {
   const isExpense = item.kind === "expense";
+  // Only expenses get paid off; incomes have no paid state to show
+  const isPaidExpense = isExpense && item.paid;
   // Overdue copies are only paid here; editing happens in their own month
-  const overdueMonth = item.overdueFromMonthRef
-    ? format(parse(item.overdueFromMonthRef, "yyyy-MM", new Date()), "MMM", {
-        locale: ptBR,
-      })
-    : null;
+  const overdueMonth = item.overdueLabel ?? null;
 
   const displayAmount = getMonthlyAmount(item.amount, item.installmentTotal);
 
@@ -102,7 +98,7 @@ export function TransactionItem({
         onClick={() => onToggle()}
         className={cn(
           "relative rounded-md transition-all duration-300 ease-in-out cursor-pointer z-10 overflow-hidden border border-transparent",
-          item.paid
+          isPaidExpense
             ? "bg-[#18181b] shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] "
             : "bg-[#29292e] hover:bg-[#323238]",
           isOpen
@@ -115,14 +111,14 @@ export function TransactionItem({
         <div
           className={cn(
             "min-h-16 items-center px-4 gap-4 grid grid-cols-[4fr_2fr_2fr_1fr] w-full transition-all",
-            item.paid && "opacity-50 grayscale",
+            isPaidExpense && "opacity-50 grayscale",
           )}
         >
           <div className="text-zinc-300 font-normal text-base flex items-center gap-3 overflow-hidden">
             <span className={cn("truncate")}>{item.description}</span>
             {overdueMonth && (
               <span className="shrink-0 rounded bg-[#f75a68]/15 px-2 py-0.5 text-xs text-[#f75a68]">
-                Atrasada · {overdueMonth}
+                {overdueMonth}
               </span>
             )}
           </div>

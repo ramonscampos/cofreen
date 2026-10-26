@@ -1,5 +1,6 @@
 "use client";
 
+import { parse } from "date-fns";
 import { LogOut, User } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -9,15 +10,19 @@ import { useEffect, useMemo, useState } from "react";
 import { getDashboardSummaryAction } from "@/app/actions/dashboard";
 import { MonthSwitcher } from "@/components/dashboard/month-switcher";
 import { SummaryCards } from "@/components/dashboard/summary-cards";
+import { getTodayInSaoPaulo } from "@/lib/dates";
 import { TRANSACTION_UPDATED_EVENT } from "@/lib/events";
-import { getCurrentMonthRef } from "@/lib/finance-logic";
+import { getCurrentMonthRef, normalizeMonthRef } from "@/lib/finance-logic";
 import type { MonthData } from "@/lib/month-data";
 import { buildMonthView } from "@/lib/month-view";
 
 export function Header() {
   const _router = useRouter();
   const searchParams = useSearchParams();
-  const monthRef = searchParams.get("month") || getCurrentMonthRef();
+  const monthRef = normalizeMonthRef(
+    searchParams.get("month"),
+    getCurrentMonthRef(),
+  );
 
   const { data: session } = useSession();
   const user = session?.user;
@@ -53,7 +58,9 @@ export function Header() {
 
   const totals = useMemo(() => {
     if (!monthData) return { incoming: 0, expense: 0, total: 0 };
-    return buildMonthView(monthData, monthRef, new Date()).totals;
+    // Same "today" as the dashboard list, so overdue rules agree
+    const today = parse(getTodayInSaoPaulo(), "yyyy-MM-dd", new Date());
+    return buildMonthView(monthData, monthRef, today).totals;
   }, [monthData, monthRef]);
 
   const handleLogout = async () => {

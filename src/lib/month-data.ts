@@ -1,5 +1,5 @@
-import { format, parse, subMonths } from "date-fns";
-import { and, eq, gte, or } from "drizzle-orm";
+import { format, subMonths } from "date-fns";
+import { and, eq, gte, inArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   balances,
@@ -10,15 +10,13 @@ import {
   syncStatus,
   transactions,
 } from "@/db/schema";
+import { getPreviousMonthRef } from "@/lib/finance-logic";
 
 // Recent card history feeds the forecast of upcoming months
 const CARD_HISTORY_MONTHS = 3;
 
 export async function getMonthData(userId: string, monthRef: string) {
-  const previousMonthRef = format(
-    subMonths(parse(monthRef, "yyyy-MM", new Date()), 1),
-    "yyyy-MM",
-  );
+  const previousMonthRef = getPreviousMonthRef(monthRef);
   const historyStart = format(
     subMonths(new Date(), CARD_HISTORY_MONTHS),
     "yyyy-MM",
@@ -32,15 +30,15 @@ export async function getMonthData(userId: string, monthRef: string) {
     cardTransactionsRes,
     syncStatusRes,
     balancesRes,
-    previousTransactionsRes,
   ] = await Promise.all([
+    // This month plus last month, whose rows tell which bills are unpaid
     db
       .select()
       .from(transactions)
       .where(
         and(
           eq(transactions.userId, userId),
-          eq(transactions.monthRef, monthRef),
+          inArray(transactions.monthRef, [monthRef, previousMonthRef]),
         ),
       ),
     db
@@ -68,27 +66,19 @@ export async function getMonthData(userId: string, monthRef: string) {
       ),
     db.select().from(syncStatus).where(eq(syncStatus.id, "pluggy")),
     db.select().from(balances).where(eq(balances.userId, userId)),
-    // Last month's rows tell which bills are still unpaid
-    db
-      .select()
-      .from(transactions)
-      .where(
-        and(
-          eq(transactions.userId, userId),
-          eq(transactions.monthRef, previousMonthRef),
-        ),
-      ),
   ]);
 
   return {
-    transactions: transactionsRes,
+    transactions: transactionsRes.filter((t) => t.monthRef === monthRef),
     templates: templatesRes,
     cards: cardsRes,
     cardBills: cardBillsRes,
     cardTransactions: cardTransactionsRes,
     syncStatus: syncStatusRes.at(0) ?? null,
     balances: balancesRes,
-    previousTransactions: previousTransactionsRes,
+    previousTransactions: transactionsRes.filter(
+      (t) => t.monthRef === previousMonthRef,
+    ),
   };
 }
 

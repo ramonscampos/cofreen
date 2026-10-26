@@ -13,6 +13,16 @@ export function getCurrentMonthRef(): string {
   return `${year}-${month}`;
 }
 
+const MONTH_REF = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+// The month comes from the URL, so anything malformed falls back
+export function normalizeMonthRef(
+  value: string | null | undefined,
+  fallback: string,
+): string {
+  return value && MONTH_REF.test(value) ? value : fallback;
+}
+
 export function getPreviousMonthRef(monthRef: string): string {
   const [yearStr, monthStr] = monthRef.split("-");
   const year = parseInt(yearStr, 10);
@@ -81,9 +91,8 @@ export function mergeTransactionsAndTemplates(
       isRecurring: !!t.isRecurring,
       transactionId: t.id,
       originalTemplateId: t.templateId ?? undefined,
-      day: t.transactionDate
-        ? new Date(`${t.transactionDate}T12:00:00`).getDate()
-        : new Date(t.createdAt).getDate(),
+      // Dates come as "yyyy-MM-dd hh:mm:ss+00"; read the day directly
+      day: Number((t.transactionDate ?? t.createdAt).slice(8, 10)),
       installmentCurrent: t.installmentCurrent ?? undefined,
       installmentTotal: t.installmentTotal ?? undefined,
     });

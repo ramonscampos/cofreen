@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getTodayInSaoPaulo } from "@/lib/dates";
-import { getCurrentMonthRef } from "@/lib/finance-logic";
+import { getCurrentMonthRef, normalizeMonthRef } from "@/lib/finance-logic";
 import { getMonthData } from "@/lib/month-data";
 import { DashboardView } from "../dashboard-view";
 
@@ -25,7 +25,7 @@ export default async function DashboardPage({
 
   // Resolve search params
   const params = await searchParams;
-  const monthRef = params.month || getCurrentMonthRef();
+  const monthRef = normalizeMonthRef(params.month, getCurrentMonthRef());
 
   const monthData = await getMonthData(session.user.id, monthRef);
 

@@ -1,5 +1,9 @@
-import { format, parse, subMonths } from "date-fns";
-import { mergeTransactionsAndTemplates } from "@/lib/finance-logic";
+import { format, parse } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import {
+  getPreviousMonthRef,
+  mergeTransactionsAndTemplates,
+} from "@/lib/finance-logic";
 import type { DashboardItem, RecurringTemplate, Transaction } from "@/types";
 
 // Payment marks before this month were wiped in the move to synced cards
@@ -12,12 +16,13 @@ export function buildOverdueItems(
   monthRef: string,
   today: Date,
 ): DashboardItem[] {
-  const previousMonthRef = format(
-    subMonths(parse(monthRef, "yyyy-MM", today), 1),
-    "yyyy-MM",
-  );
+  const previousMonthRef = getPreviousMonthRef(monthRef);
   if (previousMonthRef < OVERDUE_START_MONTH) return [];
   if (monthRef > format(today, "yyyy-MM")) return [];
+
+  const monthName = format(parse(previousMonthRef, "yyyy-MM", today), "MMM", {
+    locale: ptBR,
+  });
 
   return mergeTransactionsAndTemplates(
     previousTransactions,
@@ -30,5 +35,6 @@ export function buildOverdueItems(
       id: `overdue-${previousMonthRef}-${item.id}`,
       monthRef: previousMonthRef,
       overdueFromMonthRef: previousMonthRef,
+      overdueLabel: `Atrasada · ${monthName}`,
     }));
 }
