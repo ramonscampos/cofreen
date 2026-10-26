@@ -3,13 +3,15 @@
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { RefreshCw } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { syncCardsAction } from "@/app/actions/sync";
 import { triggerTransactionUpdate } from "@/lib/events";
 import { getConsentNotice } from "@/lib/pluggy/consent";
 import { cn } from "@/lib/utils";
 import type { SyncStatus } from "@/types";
+
+let autoSyncStarted = false;
 
 interface SyncStatusBarProps {
   status: SyncStatus | null;
@@ -18,12 +20,12 @@ interface SyncStatusBarProps {
 export function SyncStatusBar({ status }: SyncStatusBarProps) {
   const [syncing, setSyncing] = useState(false);
 
-  const autoSyncStarted = useRef(false);
-
-  // Opening the app syncs on its own, at most once a day (checked on the server)
+  // Opening the app syncs on its own, at most once a day (checked on the
+  // server). The bar remounts on every month switch, so the guard lives at
+  // module level: once per page load.
   useEffect(() => {
-    if (autoSyncStarted.current) return;
-    autoSyncStarted.current = true;
+    if (autoSyncStarted) return;
+    autoSyncStarted = true;
     setSyncing(true);
     syncCardsAction().then((result) => {
       setSyncing(false);

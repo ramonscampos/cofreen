@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { TransactionList } from "@/components/dashboard/transaction-list";
 import { Button } from "@/components/ui/button";
-import { useMonthData } from "@/hooks/use-month-data";
+import { useMonthData, useSeedMonthData } from "@/hooks/use-month-data";
 import { triggerTransactionUpdate } from "@/lib/events";
 import {
   buildPaidTemplateTransaction,
@@ -44,7 +44,12 @@ export function DashboardView({
     searchParams.get("month"),
     initialMonthRef,
   );
-  const { data: monthData } = useMonthData(
+  useSeedMonthData(initialMonthRef, initialMonthData);
+  const {
+    data: monthData,
+    isError,
+    refetch,
+  } = useMonthData(
     monthRef,
     monthRef === initialMonthRef ? initialMonthData : undefined,
   );
@@ -172,12 +177,28 @@ export function DashboardView({
     }
   };
 
-  if (!view) return <DashboardSkeleton />;
+  if (!view || !monthData) {
+    if (isError) {
+      return (
+        <div className="rounded-md bg-[#29292e] px-4 py-10 text-center space-y-4">
+          <p className="text-zinc-300">Não foi possível carregar este mês.</p>
+          <Button
+            type="button"
+            onClick={() => refetch()}
+            className="bg-[#00875f] hover:bg-[#00875f]/90 text-white font-bold"
+          >
+            Tentar de novo
+          </Button>
+        </div>
+      );
+    }
+    return <DashboardSkeleton />;
+  }
   const { items, cardBills } = view;
 
   return (
     <div className="space-y-8 relative z-10">
-      <BalanceCards balances={monthData?.balances ?? []} />
+      <BalanceCards balances={monthData.balances} />
 
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -238,10 +259,7 @@ export function DashboardView({
         </div>
       </div>
 
-      <CardBillsSection
-        bills={cardBills}
-        syncStatus={monthData?.syncStatus ?? null}
-      />
+      <CardBillsSection bills={cardBills} syncStatus={monthData.syncStatus} />
 
       <div className="grid gap-2">
         <h2 className="sr-only">Transações</h2>
