@@ -46,6 +46,8 @@ export interface Transaction {
   installmentTotal?: number | null;
   createdAt: string;
   transactionDate?: string | null;
+  deferredToMonth?: string | null;
+  deferredFromId?: string | null;
 }
 
 export type CardTransaction = InferSelectModel<typeof cardTransactions>;
@@ -70,9 +72,11 @@ export interface DashboardItem {
   installmentCurrent?: number;
   installmentTotal?: number;
   monthRef?: string;
-  // Set on last month's unpaid expense repeated in the current month
-  overdueFromMonthRef?: string;
-  overdueLabel?: string;
+  // Pushed to next month: shown here but not counted
+  deferredToMonthRef?: string;
+  // Next month's copy of a deferred bill
+  isDeferredCopy?: boolean;
+  deferLabel?: string;
 }
 
 export interface User {
@@ -113,4 +117,6 @@ export interface CreateTransactionPayload {
   installmentCurrent?: number | null;
   installmentTotal?: number | null;
   transactionDate?: string;
+  deferredToMonth?: string | null;
+  deferredFromId?: string | null;
 }

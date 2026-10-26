@@ -58,7 +58,7 @@ export function Header() {
 
   const totals = useMemo(() => {
     if (!monthData) return { incoming: 0, expense: 0, total: 0 };
-    // Same "today" as the dashboard list, so overdue rules agree
+    // Same "today" as the dashboard list
     const today = parse(getTodayInSaoPaulo(), "yyyy-MM-dd", new Date());
     return buildMonthView(monthData, monthRef, today).totals;
   }, [monthData, monthRef]);

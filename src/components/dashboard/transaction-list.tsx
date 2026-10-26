@@ -11,14 +11,18 @@ interface TransactionListProps {
   onMarkAsPaid: (item: DashboardItem) => void;
   onDelete: (item: DashboardItem) => void;
   onEdit: (item: DashboardItem) => void;
+  onDefer: (item: DashboardItem) => void;
+  onUndoDefer: (item: DashboardItem) => void;
 }
 
 export function TransactionList({
   items: initialItems,
-  viewMode = "mixed",
+  viewMode = "grouped",
   onMarkAsPaid,
   onDelete,
   onEdit,
+  onDefer,
+  onUndoDefer,
 }: TransactionListProps) {
   const [openItemId, setOpenItemId] = useState<string | number | null>(null);
   const [sortBy, setSortBy] = useState<"day" | "amount">("day");
@@ -121,6 +125,8 @@ export function TransactionList({
                 onMarkAsPaid={onMarkAsPaid}
                 onDelete={onDelete}
                 onEdit={onEdit}
+                onDefer={onDefer}
+                onUndoDefer={onUndoDefer}
               />
             ))}
 
@@ -137,6 +143,8 @@ export function TransactionList({
                 onMarkAsPaid={onMarkAsPaid}
                 onDelete={onDelete}
                 onEdit={onEdit}
+                onDefer={onDefer}
+                onUndoDefer={onUndoDefer}
               />
             ))}
           </>
@@ -150,6 +158,8 @@ export function TransactionList({
               onMarkAsPaid={onMarkAsPaid}
               onDelete={onDelete}
               onEdit={onEdit}
+              onDefer={onDefer}
+              onUndoDefer={onUndoDefer}
             />
           ))
         )}

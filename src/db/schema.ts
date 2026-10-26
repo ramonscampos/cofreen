@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   boolean,
   integer,
   numeric,
@@ -135,6 +136,13 @@ export const transactions = pgTable("transactions", {
     withTimezone: true,
     mode: "string",
   }),
+  // Set on a bill pushed to next month (YYYY-MM it moved to)
+  deferredToMonth: text("deferred_to_month"),
+  // Set on next month's copy; removing the original removes the copy
+  deferredFromId: uuid("deferred_from_id").references(
+    (): AnyPgColumn => transactions.id,
+    { onDelete: "cascade" },
+  ),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
     .notNull()
     .defaultNow(),

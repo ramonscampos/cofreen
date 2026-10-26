@@ -41,7 +41,8 @@ export function DashboardView({
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<DashboardItem | null>(null);
 
-  const [viewMode, setViewMode] = useState<"mixed" | "grouped">("mixed");
+  // Grouped keeps incomes apart from expenses
+  const [viewMode, setViewMode] = useState<"mixed" | "grouped">("grouped");
 
   const { items, cardBills } = useMemo(
     () =>
@@ -96,6 +97,31 @@ export function DashboardView({
       router.refresh();
     } else {
       toast.error(result.error || "Erro ao remover item");
+    }
+  };
+
+  const handleDefer = async (item: DashboardItem) => {
+    const { deferBillAction } = await import("@/app/actions/transactions");
+    const result = await deferBillAction(item, initialMonthRef);
+    if (result.success) {
+      toast.success("Conta adiada para o próximo mês");
+      triggerTransactionUpdate();
+      router.refresh();
+    } else {
+      toast.error(result.error || "Erro ao adiar conta");
+    }
+  };
+
+  const handleUndoDefer = async (item: DashboardItem) => {
+    if (!item.transactionId) return;
+    const { undoDeferAction } = await import("@/app/actions/transactions");
+    const result = await undoDeferAction(item.transactionId);
+    if (result.success) {
+      toast.success("Adiamento desfeito");
+      triggerTransactionUpdate();
+      router.refresh();
+    } else {
+      toast.error(result.error || "Erro ao desfazer adiamento");
     }
   };
 
@@ -207,6 +233,8 @@ export function DashboardView({
           onDelete={handleDelete}
           onEdit={handleEdit}
           onMarkAsPaid={handleMarkAsPaid}
+          onDefer={handleDefer}
+          onUndoDefer={handleUndoDefer}
         />
       </div>
 

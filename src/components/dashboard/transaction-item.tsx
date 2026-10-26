@@ -1,4 +1,12 @@
-import { CheckCircle2, Pencil, Repeat, Trash2, Undo2 } from "lucide-react";
+import {
+  CalendarArrowUp,
+  CheckCircle2,
+  Pencil,
+  Repeat,
+  Trash2,
+  Undo2,
+} from "lucide-react";
+import type { ReactNode } from "react";
 import { getMonthlyAmount } from "@/lib/finance-logic";
 import { cn } from "@/lib/utils";
 import type { DashboardItem } from "@/types";
@@ -10,7 +18,19 @@ interface TransactionItemProps {
   onMarkAsPaid: (item: DashboardItem) => void;
   onDelete: (item: DashboardItem) => void;
   onEdit: (item: DashboardItem) => void;
+  onDefer: (item: DashboardItem) => void;
+  onUndoDefer: (item: DashboardItem) => void;
 }
+
+interface RowAction {
+  key: string;
+  label: string;
+  icon: ReactNode;
+  className: string;
+  run: () => void;
+}
+
+const ACTION_WIDTH_REM = 4;
 
 export function TransactionItem({
   item,
@@ -19,12 +39,13 @@ export function TransactionItem({
   onMarkAsPaid,
   onDelete,
   onEdit,
+  onDefer,
+  onUndoDefer,
 }: TransactionItemProps) {
   const isExpense = item.kind === "expense";
   // Only expenses get paid off; incomes have no paid state to show
   const isPaidExpense = isExpense && item.paid;
-  // Overdue copies are only paid here; editing happens in their own month
-  const overdueMonth = item.overdueLabel ?? null;
+  const isDeferred = !!item.deferredToMonthRef;
 
   const displayAmount = getMonthlyAmount(item.amount, item.installmentTotal);
 
@@ -33,92 +54,124 @@ export function TransactionItem({
     currency: "BRL",
   }).format(displayAmount);
 
+  const close = (run: () => void) => () => {
+    run();
+    onToggle();
+  };
+  const iconClass = "h-5 w-5 text-white";
+  const actions: RowAction[] = isDeferred
+    ? [
+        {
+          key: "undo-defer",
+          label: "Desfazer adiamento",
+          icon: <Undo2 className={iconClass} />,
+          className: "bg-yellow-600 hover:bg-yellow-700",
+          run: close(() => onUndoDefer(item)),
+        },
+      ]
+    : [
+        // A deferred copy is managed from the month it came from
+        ...(item.isDeferredCopy
+          ? []
+          : [
+              {
+                key: "delete",
+                label: "Excluir",
+                icon: <Trash2 className={iconClass} />,
+                className: "bg-red-600 hover:bg-red-700",
+                run: () => onDelete(item),
+              },
+              {
+                key: "edit",
+                label: "Editar",
+                icon: <Pencil className={iconClass} />,
+                className: "bg-zinc-700 hover:bg-zinc-600",
+                run: close(() => onEdit(item)),
+              },
+            ]),
+        ...(isExpense && !item.paid
+          ? [
+              {
+                key: "defer",
+                label: "Adiar pro próximo mês",
+                icon: <CalendarArrowUp className={iconClass} />,
+                className: "bg-sky-700 hover:bg-sky-600",
+                run: close(() => onDefer(item)),
+              },
+            ]
+          : []),
+        ...(isExpense
+          ? [
+              {
+                key: "pay",
+                label: item.paid ? "Desmarcar pago" : "Marcar como pago",
+                icon: item.paid ? (
+                  <Undo2 className={iconClass} />
+                ) : (
+                  <CheckCircle2 className={iconClass} />
+                ),
+                className: item.paid
+                  ? "bg-yellow-600 hover:bg-yellow-700"
+                  : "bg-[#00875f] hover:bg-[#00875f]/90",
+                run: close(() => onMarkAsPaid(item)),
+              },
+            ]
+          : []),
+      ];
+  const actionsWidth = actions.length * ACTION_WIDTH_REM;
+
   return (
     <div className="relative w-full mb-2">
       <div
         className={cn(
-          "absolute inset-y-0 right-0 flex h-16 transition-opacity duration-300",
-          overdueMonth ? "w-20" : "w-48",
+          "absolute inset-y-0 right-0 flex h-16 gap-1 transition-opacity duration-300",
           !isOpen && "opacity-0 pointer-events-none",
         )}
+        style={{ width: `${actionsWidth}rem` }}
       >
-        {!overdueMonth && (
-          <>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onDelete(item);
-              }}
-              className="flex-1 bg-red-600 hover:bg-red-700 flex items-center justify-center transition-colors rounded-l-none rounded-r-lg z-3 -mr-4 h-16.5"
-            >
-              <Trash2 className="h-5 w-5 text-white  ml-3" />
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onEdit(item);
-                onToggle(); // Close on action
-              }}
-              className={cn(
-                "flex-1 bg-zinc-700 hover:bg-zinc-600 flex items-center justify-center transition-colors rounded-r-lg z-2  h-16.5",
-                isExpense && "-mr-4",
-              )}
-            >
-              <Pencil className="h-5 w-5 text-white  ml-3" />
-            </button>
-          </>
-        )}
-        {isExpense && (
+        {actions.map((action) => (
           <button
+            key={action.key}
             type="button"
+            title={action.label}
+            aria-label={action.label}
             onClick={(e) => {
               e.stopPropagation();
-              onMarkAsPaid(item);
-              onToggle(); // Close on action
+              action.run();
             }}
             className={cn(
-              "flex-1 flex items-center justify-center transition-colors rounded-r-lg h-16.5 z-1",
-              item.paid
-                ? "bg-yellow-600 hover:bg-yellow-700"
-                : "bg-[#00875f] hover:bg-[#00875f]/90",
+              "flex-1 flex items-center justify-center rounded-lg transition-colors",
+              action.className,
             )}
           >
-            {item.paid ? (
-              <Undo2 className="h-5 w-5 text-white  ml-3" />
-            ) : (
-              <CheckCircle2 className="h-5 w-5 text-white  ml-3" />
-            )}
+            {action.icon}
           </button>
-        )}
+        ))}
       </div>
 
       <div
         onClick={() => onToggle()}
         className={cn(
           "relative rounded-md transition-all duration-300 ease-in-out cursor-pointer z-10 overflow-hidden border border-transparent",
-          isPaidExpense
+          isPaidExpense || isDeferred
             ? "bg-[#18181b] shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] "
             : "bg-[#29292e] hover:bg-[#323238]",
-          isOpen
-            ? overdueMonth
-              ? "w-[calc(100%-4rem)]"
-              : "w-[calc(100%-11rem)]"
-            : "w-full",
         )}
+        style={{
+          width: isOpen ? `calc(100% - ${actionsWidth + 0.5}rem)` : "100%",
+        }}
       >
         <div
           className={cn(
             "min-h-16 items-center px-4 gap-4 grid grid-cols-[4fr_2fr_2fr_1fr] w-full transition-all",
-            isPaidExpense && "opacity-50 grayscale",
+            (isPaidExpense || isDeferred) && "opacity-50 grayscale",
           )}
         >
           <div className="text-zinc-300 font-normal text-base flex items-center gap-3 overflow-hidden">
             <span className={cn("truncate")}>{item.description}</span>
-            {overdueMonth && (
-              <span className="shrink-0 rounded bg-[#f75a68]/15 px-2 py-0.5 text-xs text-[#f75a68]">
-                {overdueMonth}
+            {item.deferLabel && (
+              <span className="shrink-0 rounded bg-sky-500/15 px-2 py-0.5 text-xs text-sky-300">
+                {item.deferLabel}
               </span>
             )}
           </div>

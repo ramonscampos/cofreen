@@ -1,4 +1,5 @@
-import { differenceInCalendarMonths, parse } from "date-fns";
+import { differenceInCalendarMonths, format, parse } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import type {
   CreateTransactionPayload,
   DashboardItem,
@@ -70,6 +71,25 @@ export function getMonthlyAmount(
     : amount;
 }
 
+const monthName = (monthRef: string) =>
+  format(parse(monthRef, "yyyy-MM", new Date()), "MMM", { locale: ptBR });
+
+function deferralFields(t: Transaction): Partial<DashboardItem> {
+  if (t.deferredToMonth) {
+    return {
+      deferredToMonthRef: t.deferredToMonth,
+      deferLabel: `Adiada → ${monthName(t.deferredToMonth)}`,
+    };
+  }
+  if (t.deferredFromId) {
+    return {
+      isDeferredCopy: true,
+      deferLabel: `Adiada de ${monthName(getPreviousMonthRef(t.monthRef))}`,
+    };
+  }
+  return {};
+}
+
 // Card spending comes from synced card bills (see lib/cards). Legacy rows tied
 // to a card are ignored so they never double count against a bill.
 export function mergeTransactionsAndTemplates(
@@ -95,6 +115,7 @@ export function mergeTransactionsAndTemplates(
       day: Number((t.transactionDate ?? t.createdAt).slice(8, 10)),
       installmentCurrent: t.installmentCurrent ?? undefined,
       installmentTotal: t.installmentTotal ?? undefined,
+      ...deferralFields(t),
     });
   });
 
@@ -159,7 +180,8 @@ export function calculateTotals(items: DashboardItem[]): MonthTotals {
   items.forEach((item) => {
     if (item.kind === "incoming") {
       incoming += item.amount;
-    } else if (item.kind === "expense") {
+    } else if (item.kind === "expense" && !item.deferredToMonthRef) {
+      // A bill pushed to next month is paid there, not here
       expense += getMonthlyAmount(item.amount, item.installmentTotal);
     }
   });
@@ -177,8 +199,7 @@ export function buildPaidTemplateTransaction(
     description: item.description,
     amount: item.amount,
     kind: item.kind,
-    // An overdue bill is paid in the month it belongs to
-    monthRef: item.overdueFromMonthRef ?? monthRef,
+    monthRef,
     paid: true,
     templateId: item.originalTemplateId ?? item.id,
     isRecurring: item.isRecurring,

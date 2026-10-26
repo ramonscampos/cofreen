@@ -1,5 +1,5 @@
 import { format, subMonths } from "date-fns";
-import { and, eq, gte, inArray, or } from "drizzle-orm";
+import { and, eq, gte, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   balances,
@@ -10,13 +10,11 @@ import {
   syncStatus,
   transactions,
 } from "@/db/schema";
-import { getPreviousMonthRef } from "@/lib/finance-logic";
 
 // Recent card history feeds the forecast of upcoming months
 const CARD_HISTORY_MONTHS = 3;
 
 export async function getMonthData(userId: string, monthRef: string) {
-  const previousMonthRef = getPreviousMonthRef(monthRef);
   const historyStart = format(
     subMonths(new Date(), CARD_HISTORY_MONTHS),
     "yyyy-MM",
@@ -31,14 +29,13 @@ export async function getMonthData(userId: string, monthRef: string) {
     syncStatusRes,
     balancesRes,
   ] = await Promise.all([
-    // This month plus last month, whose rows tell which bills are unpaid
     db
       .select()
       .from(transactions)
       .where(
         and(
           eq(transactions.userId, userId),
-          inArray(transactions.monthRef, [monthRef, previousMonthRef]),
+          eq(transactions.monthRef, monthRef),
         ),
       ),
     db
@@ -69,16 +66,13 @@ export async function getMonthData(userId: string, monthRef: string) {
   ]);
 
   return {
-    transactions: transactionsRes.filter((t) => t.monthRef === monthRef),
+    transactions: transactionsRes,
     templates: templatesRes,
     cards: cardsRes,
     cardBills: cardBillsRes,
     cardTransactions: cardTransactionsRes,
     syncStatus: syncStatusRes.at(0) ?? null,
     balances: balancesRes,
-    previousTransactions: transactionsRes.filter(
-      (t) => t.monthRef === previousMonthRef,
-    ),
   };
 }
 
