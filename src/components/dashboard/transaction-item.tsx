@@ -30,7 +30,8 @@ interface RowAction {
   run: () => void;
 }
 
-const ACTION_WIDTH_REM = 4;
+// Narrow enough that four actions still leave room on a phone
+const ACTION_WIDTH_REM = 3;
 
 export function TransactionItem({
   item,

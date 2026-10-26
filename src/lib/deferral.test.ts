@@ -67,6 +67,33 @@ describe("buildDeferral", () => {
     expect(deferral.copy).not.toHaveProperty("templateId");
   });
 
+  it("keeps the due day on the deferred original", () => {
+    const [item] = mergeTransactionsAndTemplates([], [internet], "2026-10");
+    const { original } = buildDeferral(item, "2026-10");
+    expect(original.kind === "create" && original.values.transactionDate).toBe(
+      "2026-10-15",
+    );
+  });
+
+  it("moves a bill due on the 31st to the last day of next month", () => {
+    const [item] = mergeTransactionsAndTemplates(
+      [],
+      [{ ...internet, dayOfMonth: 31 }],
+      "2026-10",
+    );
+    expect(buildDeferral(item, "2026-10").copy.transactionDate).toBe(
+      "2026-11-30",
+    );
+    const [jan] = mergeTransactionsAndTemplates(
+      [],
+      [{ ...internet, dayOfMonth: 30 }],
+      "2027-01",
+    );
+    expect(buildDeferral(jan, "2027-01").copy.transactionDate).toBe(
+      "2027-02-28",
+    );
+  });
+
   it("marks an existing row instead of creating one", () => {
     const [item] = mergeTransactionsAndTemplates(
       [tx({ id: "tx-dentista", description: "Dentista", isRecurring: false })],

@@ -1,3 +1,4 @@
+import { getDaysInMonth, parse } from "date-fns";
 import { getNextMonthRef } from "@/lib/finance-logic";
 import type { CreateTransactionPayload, DashboardItem } from "@/types";
 
@@ -10,9 +11,15 @@ export interface Deferral {
   copy: Omit<CreateTransactionPayload, "deferredFromId">;
 }
 
+// Due day within the month, capped at its last day (31 Oct -> 30 Nov)
+function dateInMonth(monthRef: string, day: number | undefined): string {
+  const lastDay = getDaysInMonth(parse(monthRef, "yyyy-MM", new Date()));
+  const safeDay = Math.min(Math.max(day ?? 1, 1), lastDay);
+  return `${monthRef}-${String(safeDay).padStart(2, "0")}`;
+}
+
 export function buildDeferral(item: DashboardItem, monthRef: string): Deferral {
   const nextMonthRef = getNextMonthRef(monthRef);
-  const day = String(item.day ?? 1).padStart(2, "0");
   const installment = {
     installmentCurrent: item.installmentCurrent ?? null,
     installmentTotal: item.installmentTotal ?? null,
@@ -32,6 +39,7 @@ export function buildDeferral(item: DashboardItem, monthRef: string): Deferral {
             templateId: item.originalTemplateId ?? item.id,
             isRecurring: item.isRecurring,
             deferredToMonth: nextMonthRef,
+            transactionDate: dateInMonth(monthRef, item.day),
             ...installment,
           },
         },
@@ -42,7 +50,7 @@ export function buildDeferral(item: DashboardItem, monthRef: string): Deferral {
       monthRef: nextMonthRef,
       paid: false,
       isRecurring: false,
-      transactionDate: `${nextMonthRef}-${day}`,
+      transactionDate: dateInMonth(nextMonthRef, item.day),
       ...installment,
     },
   };
