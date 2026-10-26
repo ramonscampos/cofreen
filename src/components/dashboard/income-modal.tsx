@@ -11,6 +11,7 @@ import { MoneyInput } from "@/components/ui/money-input";
 import { MonthYearPicker } from "@/components/ui/month-year-picker";
 import { Switch } from "@/components/ui/switch";
 import { triggerTransactionUpdate } from "@/lib/events";
+import { buildItemUpdate } from "@/lib/item-update";
 import { cn } from "@/lib/utils";
 import type {
   ActionResult,
@@ -116,18 +117,16 @@ export function IncomeModal({
     );
 
     if (initialData?.id) {
-      // UPDATE
-      if (initialData.isRecurring) {
-        result = await updateTemplateAction(
-          initialData.id,
-          payload as Partial<CreateTemplatePayload>,
-        );
-      } else {
-        result = await updateTransactionAction(
-          initialData.id,
-          payload as Partial<CreateTransactionPayload>,
-        );
-      }
+      const update = buildItemUpdate(initialData, {
+        description,
+        amount: numericAmount,
+        day: Number.parseInt(day, 10) || 1,
+        monthRef: monthRefStr,
+      });
+      result =
+        update.target === "template"
+          ? await updateTemplateAction(update.id, update.payload)
+          : await updateTransactionAction(update.id, update.payload);
     } else {
       // CREATE
       if (isRecurring) {

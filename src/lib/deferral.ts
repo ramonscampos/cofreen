@@ -1,4 +1,4 @@
-import { getDaysInMonth, parse } from "date-fns";
+import { dateInMonth } from "@/lib/dates";
 import { getNextMonthRef } from "@/lib/finance-logic";
 import type { CreateTransactionPayload, DashboardItem } from "@/types";
 
@@ -9,13 +9,6 @@ export interface Deferral {
     | { kind: "update"; id: string };
   // A one-off copy in next month, linked to the original once it has an id
   copy: Omit<CreateTransactionPayload, "deferredFromId">;
-}
-
-// Due day within the month, capped at its last day (31 Oct -> 30 Nov)
-function dateInMonth(monthRef: string, day: number | undefined): string {
-  const lastDay = getDaysInMonth(parse(monthRef, "yyyy-MM", new Date()));
-  const safeDay = Math.min(Math.max(day ?? 1, 1), lastDay);
-  return `${monthRef}-${String(safeDay).padStart(2, "0")}`;
 }
 
 export function buildDeferral(item: DashboardItem, monthRef: string): Deferral {
