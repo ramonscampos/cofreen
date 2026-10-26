@@ -120,9 +120,10 @@ export function DashboardView({
       return;
     }
 
-    const result = await updateTransactionAction(item.id, {
-      paid: !item.paid,
-    });
+    const result = await updateTransactionAction(
+      item.transactionId ?? item.id,
+      { paid: !item.paid },
+    );
 
     if (result.success) {
       toast.success(item.paid ? "Marcado como não pago" : "Marcado como pago");

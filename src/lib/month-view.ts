@@ -5,6 +5,7 @@ import {
   mergeTransactionsAndTemplates,
 } from "@/lib/finance-logic";
 import type { MonthData } from "@/lib/month-data";
+import { buildOverdueItems } from "@/lib/overdue";
 import type { DashboardItem } from "@/types";
 
 export interface MonthView {
@@ -18,11 +19,19 @@ export function buildMonthView(
   monthRef: string,
   today: Date,
 ): MonthView {
-  const items = mergeTransactionsAndTemplates(
-    data.transactions,
-    data.templates,
-    monthRef,
-  );
+  const items = [
+    ...buildOverdueItems(
+      data.previousTransactions,
+      data.templates,
+      monthRef,
+      today,
+    ),
+    ...mergeTransactionsAndTemplates(
+      data.transactions,
+      data.templates,
+      monthRef,
+    ),
+  ];
   const cardBills = data.cards
     .map((card) =>
       buildCardBillView({

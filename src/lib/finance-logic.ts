@@ -168,7 +168,8 @@ export function buildPaidTemplateTransaction(
     description: item.description,
     amount: item.amount,
     kind: item.kind,
-    monthRef,
+    // An overdue bill is paid in the month it belongs to
+    monthRef: item.overdueFromMonthRef ?? monthRef,
     paid: true,
     templateId: item.originalTemplateId ?? item.id,
     isRecurring: item.isRecurring,

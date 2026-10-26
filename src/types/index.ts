@@ -70,6 +70,8 @@ export interface DashboardItem {
   installmentCurrent?: number;
   installmentTotal?: number;
   monthRef?: string;
+  // Set on last month's unpaid expense repeated in the current month
+  overdueFromMonthRef?: string;
 }
 
 export interface User {
