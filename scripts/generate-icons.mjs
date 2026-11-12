@@ -33,7 +33,10 @@ const fillFor = (cls) => (cls === "fil2" ? LIGHT : DARK);
 // Mascot bounding box in logo coordinates, measured from the rendered paths
 // (ears at the top, face below). Icons are centred on it.
 const MASCOT = { minX: 1699, maxX: 2607, minY: 0, maxY: 863 };
-const MASCOT_SIZE = Math.max(MASCOT.maxX - MASCOT.minX, MASCOT.maxY - MASCOT.minY);
+const MASCOT_SIZE = Math.max(
+  MASCOT.maxX - MASCOT.minX,
+  MASCOT.maxY - MASCOT.minY,
+);
 const CENTER_X = (MASCOT.minX + MASCOT.maxX) / 2;
 const CENTER_Y = (MASCOT.minY + MASCOT.maxY) / 2;
 
@@ -97,5 +100,8 @@ images.forEach((png, i) => {
   header.writeUInt32LE(offset, entry + 12);
   offset += png.length;
 });
-writeFileSync(join(root, "src/app/favicon.ico"), Buffer.concat([header, ...images]));
+writeFileSync(
+  join(root, "src/app/favicon.ico"),
+  Buffer.concat([header, ...images]),
+);
 console.log("src/app/favicon.ico");
