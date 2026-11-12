@@ -84,7 +84,15 @@ for (const { file, size, fill } of targets) {
 
 // favicon.ico with PNG entries (16, 32, 48); sharp can't write ICO itself
 const FAVICON_SIZES = [16, 32, 48];
-const images = await Promise.all(FAVICON_SIZES.map((s) => render(s, 0.86)));
+// ICO decoders require RGBA PNGs
+const images = await Promise.all(
+  FAVICON_SIZES.map(async (s) =>
+    sharp(await render(s, 0.86))
+      .ensureAlpha()
+      .png()
+      .toBuffer(),
+  ),
+);
 const header = Buffer.alloc(6 + 16 * images.length);
 header.writeUInt16LE(0, 0);
 header.writeUInt16LE(1, 2);
