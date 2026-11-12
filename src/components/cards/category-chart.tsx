@@ -43,14 +43,14 @@ export function CategoryChart({
             aria-pressed={isSelected}
             onClick={() => onSelect(isSelected ? null : row)}
             className={cn(
-              "w-full grid grid-cols-[minmax(6rem,10rem)_1fr_auto] items-center gap-3 rounded px-1 py-1 text-left text-sm transition-colors hover:bg-zinc-800/60",
+              "grid min-h-11 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded px-1 py-1 text-left text-sm transition-colors hover:bg-zinc-800/60 md:min-h-0 md:grid-cols-[minmax(6rem,10rem)_1fr_auto]",
               isSelected && "bg-zinc-800",
               isDimmed && "opacity-40",
             )}
             title={`${row.label}: ${formatCurrency(row.amount)} (${share}%)`}
           >
             <span className="truncate text-zinc-300">{row.label}</span>
-            <span className="h-2 rounded-full bg-zinc-800">
+            <span className="col-span-2 row-start-2 h-2 rounded-full bg-zinc-800 md:col-span-1 md:row-start-auto">
               <span
                 className="block h-2 rounded-full"
                 style={{

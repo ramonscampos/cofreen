@@ -19,7 +19,7 @@ function Amount({ value }: { value: number | undefined }) {
 
 export function SummaryCards({ totals }: SummaryCardsProps) {
   return (
-    <div className="grid gap-8 md:grid-cols-3 top-16 -mt-16 relative">
+    <div className="grid gap-4 md:grid-cols-3 md:gap-8 top-16 -mt-16 relative">
       <Card className="bg-[#323238] border-none text-white">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-base font-normal text-zinc-300">
@@ -28,7 +28,7 @@ export function SummaryCards({ totals }: SummaryCardsProps) {
           <ArrowUpCircle className="h-8 w-8 text-[#00b37e]" />
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-bold text-white mt-4">
+          <div className="mt-2 truncate text-3xl font-bold text-white md:mt-4">
             <Amount value={totals?.incoming} />
           </div>
         </CardContent>
@@ -42,7 +42,7 @@ export function SummaryCards({ totals }: SummaryCardsProps) {
           <ArrowDownCircle className="h-8 w-8 text-[#f75a68]" />
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-bold text-white mt-4">
+          <div className="mt-2 truncate text-3xl font-bold text-white md:mt-4">
             <Amount value={totals?.expense} />
           </div>
         </CardContent>
@@ -56,7 +56,7 @@ export function SummaryCards({ totals }: SummaryCardsProps) {
           <DollarSign className="h-8 w-8 text-white" />
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-bold text-white mt-4">
+          <div className="mt-2 truncate text-3xl font-bold text-white md:mt-4">
             <Amount value={totals?.total} />
           </div>
         </CardContent>

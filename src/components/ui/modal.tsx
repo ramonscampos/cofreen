@@ -28,28 +28,30 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4 pt-[max(1rem,env(safe-area-inset-top))] pr-[max(1rem,env(safe-area-inset-right))] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[max(1rem,env(safe-area-inset-left))] backdrop-blur-sm"
       onClick={onClose}
     >
       <div
         className={cn(
-          "w-full max-w-lg rounded-lg border border-zinc-800 bg-zinc-900 shadow-xl",
+          "flex max-h-full w-full max-w-lg flex-col rounded-lg border border-zinc-800 bg-zinc-900 shadow-xl",
           className,
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-zinc-800 p-6 pb-4">
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
+        <div className="flex shrink-0 items-center justify-between border-b border-zinc-800 p-4 pb-3 sm:p-6 sm:pb-4">
+          <h2 className="min-w-0 truncate text-lg font-semibold text-white">
+            {title}
+          </h2>
           <button
             onClick={onClose}
             type="button"
-            className="rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-zinc-800 data-[state=open]:text-zinc-500"
+            className="-m-3 shrink-0 rounded-sm p-3 opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-zinc-800 data-[state=open]:text-zinc-500"
           >
             <X className="h-4 w-4 text-zinc-400" />
             <span className="sr-only">Close</span>
           </button>
         </div>
-        <div className="p-6">{children}</div>
+        <div className="overflow-y-auto p-4 sm:p-6">{children}</div>
       </div>
     </div>,
     document.body,

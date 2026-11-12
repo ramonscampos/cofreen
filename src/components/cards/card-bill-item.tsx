@@ -44,17 +44,17 @@ export function CardBillItem({ bill }: CardBillItemProps) {
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expanded}
         className={cn(
-          "w-full min-h-16 px-4 grid grid-cols-[auto_4fr_2fr_2fr_auto] items-center gap-4 text-left transition-colors",
+          "grid min-h-16 w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-3 py-2 text-left transition-colors md:grid-cols-[auto_4fr_2fr_2fr_auto] md:gap-4 md:px-4 md:py-0",
           !isEmpty && "hover:bg-[#323238] cursor-pointer",
           isEmpty && "cursor-default",
         )}
       >
         <span
-          className="h-3 w-3 rounded-full"
+          className="col-start-1 row-span-2 row-start-1 h-3 w-3 rounded-full md:col-start-auto md:row-span-1 md:row-start-auto"
           style={{ backgroundColor: bill.card.color }}
           aria-hidden
         />
-        <span className="flex items-center gap-3 overflow-hidden">
+        <span className="col-start-2 row-start-1 flex items-center gap-3 overflow-hidden md:col-start-auto md:row-start-auto">
           <span className="truncate text-zinc-200">{bill.card.bankName}</span>
           {!isEmpty && (
             <span
@@ -73,7 +73,7 @@ export function CardBillItem({ bill }: CardBillItemProps) {
         </span>
         <span
           className={cn(
-            "font-bold tabular-nums",
+            "col-start-2 row-start-2 truncate font-bold tabular-nums md:col-start-auto md:row-start-auto",
             isEmpty ? "text-zinc-500 font-normal" : "text-[#f75a68]",
           )}
         >
@@ -81,10 +81,12 @@ export function CardBillItem({ bill }: CardBillItemProps) {
             ? "Sem fatura neste mês"
             : `- ${formatCurrency(bill.amount)}`}
         </span>
-        <span className="text-zinc-500 text-sm">Vence dia {dueDay}</span>
+        <span className="col-start-3 row-start-2 whitespace-nowrap text-right text-sm text-zinc-500 md:col-start-auto md:row-start-auto">
+          Vence dia {dueDay}
+        </span>
         <ChevronDown
           className={cn(
-            "h-4 w-4 text-zinc-500 transition-transform",
+            "col-start-3 row-start-1 ml-auto h-4 w-4 text-zinc-500 transition-transform md:col-start-auto md:row-start-auto",
             expanded && "rotate-180",
             isEmpty && "invisible",
           )}

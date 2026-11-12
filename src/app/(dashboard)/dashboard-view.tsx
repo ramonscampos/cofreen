@@ -1,12 +1,17 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { parse } from "date-fns";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { TransactionList } from "@/components/dashboard/transaction-list";
 import { Button } from "@/components/ui/button";
-import { useMonthData, useSeedMonthData } from "@/hooks/use-month-data";
+import {
+  MONTH_QUERY_ROOT,
+  useMonthData,
+  useSeedMonthData,
+} from "@/hooks/use-month-data";
 import { triggerTransactionUpdate } from "@/lib/events";
 import {
   buildPaidTemplateTransaction,
@@ -39,6 +44,7 @@ export function DashboardView({
   today,
 }: DashboardViewProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const monthRef = normalizeMonthRef(
     searchParams.get("month"),
@@ -164,10 +170,28 @@ export function DashboardView({
       return;
     }
 
-    const result = await updateTransactionAction(
-      item.transactionId ?? item.id,
-      { paid: !item.paid },
+    // Flip it in the cache first so the item changes group right away
+    const transactionId = item.transactionId ?? item.id;
+    const monthKey = [MONTH_QUERY_ROOT, monthRef];
+    const previous = queryClient.getQueryData<MonthData>(monthKey);
+    queryClient.setQueryData<MonthData>(monthKey, (current) =>
+      current
+        ? {
+            ...current,
+            transactions: current.transactions.map((t) =>
+              t.id === transactionId ? { ...t, paid: !item.paid } : t,
+            ),
+          }
+        : current,
     );
+
+    const result = await updateTransactionAction(transactionId, {
+      paid: !item.paid,
+    });
+
+    if (!result.success && previous) {
+      queryClient.setQueryData(monthKey, previous);
+    }
 
     if (result.success) {
       toast.success(item.paid ? "Marcado como não pago" : "Marcado como pago");
@@ -200,18 +224,18 @@ export function DashboardView({
     <div className="space-y-8 relative z-10">
       <BalanceCards balances={monthData.balances} />
 
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex w-full items-center gap-3 sm:w-auto">
           <Button
             type="button"
-            className="bg-[#00875f] hover:bg-[#00875f]/90 text-white font-bold h-12 px-6"
+            className="h-12 flex-1 bg-[#00875f] px-4 font-bold text-white hover:bg-[#00875f]/90 sm:flex-none sm:px-6"
             onClick={() => openNewModal("incoming")}
           >
             Nova entrada
           </Button>
           <Button
             type="button"
-            className="bg-[#f75a68] hover:bg-[#f75a68]/90 text-white font-bold h-12 px-6"
+            className="h-12 flex-1 bg-[#f75a68] px-4 font-bold text-white hover:bg-[#f75a68]/90 sm:flex-none sm:px-6"
             onClick={() => openNewModal("expense")}
           >
             Nova despesa
@@ -220,7 +244,7 @@ export function DashboardView({
 
         <button
           type="button"
-          className="text-white font-bold text-sm hover:underline flex items-center gap-1 transition-colors"
+          className="flex min-h-11 items-center gap-1 text-sm font-bold text-white transition-colors hover:underline"
           onClick={() => router.push("/cards")}
         >
           Gerenciar cartões
@@ -234,12 +258,13 @@ export function DashboardView({
             type="button"
             onClick={() => setViewMode("mixed")}
             className={cn(
-              "p-1.5 rounded-md transition-all hover:text-white",
+              "flex h-11 w-11 items-center justify-center rounded-md transition-all hover:text-white md:h-auto md:w-auto md:p-1.5",
               viewMode === "mixed"
                 ? "bg-[#00875f] text-white shadow-sm"
                 : "text-zinc-400 hover:bg-zinc-800",
             )}
             title="Visualização mista"
+            aria-label="Visualização mista"
           >
             <List size={18} />
           </button>
@@ -247,12 +272,13 @@ export function DashboardView({
             type="button"
             onClick={() => setViewMode("grouped")}
             className={cn(
-              "p-1.5 rounded-md transition-all hover:text-white",
+              "flex h-11 w-11 items-center justify-center rounded-md transition-all hover:text-white md:h-auto md:w-auto md:p-1.5",
               viewMode === "grouped"
                 ? "bg-[#00875f] text-white shadow-sm"
                 : "text-zinc-400 hover:bg-zinc-800",
             )}
             title="Visualização agrupada"
+            aria-label="Visualização agrupada"
           >
             <Layers size={18} />
           </button>

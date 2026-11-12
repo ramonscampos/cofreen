@@ -9,7 +9,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black">
+    <div className="flex min-h-dvh items-center justify-center bg-black p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))]">
       <div className="w-full max-w-md p-8 space-y-6 bg-zinc-900 rounded-lg shadow-xl border border-zinc-800 text-center">
         <div className="flex justify-center mb-6">
           <Image

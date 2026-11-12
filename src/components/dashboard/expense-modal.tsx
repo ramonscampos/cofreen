@@ -291,7 +291,7 @@ export function ExpenseModal({
         </div>
 
         {/* Row 1: Parcelada + Qtd */}
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
           <div className="flex items-center gap-2">
             <span
               className={cn(
@@ -338,7 +338,7 @@ export function ExpenseModal({
                   setInstallmentCurrent(e.target.value.replace(/\D/g, ""))
                 }
                 disabled={!isInstallment}
-                className="bg-gray-1 border-none text-white w-14 h-10 disabled:opacity-50 flex-1"
+                className="bg-gray-1 border-none text-white w-14 min-w-0 h-10 disabled:opacity-50 flex-1"
               />
             </div>
 
@@ -362,7 +362,7 @@ export function ExpenseModal({
                   setInstallments(e.target.value.replace(/\D/g, ""))
                 }
                 disabled={!isInstallment}
-                className="bg-gray-1 border-none text-white w-14 h-10 disabled:opacity-50 flex-1"
+                className="bg-gray-1 border-none text-white w-14 min-w-0 h-10 disabled:opacity-50 flex-1"
               />
             </div>
           </div>

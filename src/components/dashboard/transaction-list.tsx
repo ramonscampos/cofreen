@@ -2,6 +2,7 @@
 
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { useState } from "react";
+import { splitPaidLast } from "@/lib/paid-last";
 import type { DashboardItem } from "@/types";
 import { TransactionItem } from "./transaction-item";
 
@@ -77,15 +78,50 @@ export function TransactionList({
       ? sortItems(initialItems.filter((i) => i.kind === "expense"))
       : [];
 
+  const renderItem = (item: DashboardItem) => (
+    <TransactionItem
+      key={item.id}
+      item={item}
+      isOpen={openItemId === item.id}
+      onToggle={() => handleToggle(item.id)}
+      onMarkAsPaid={onMarkAsPaid}
+      onDelete={onDelete}
+      onEdit={onEdit}
+      onDefer={onDefer}
+      onUndoDefer={onUndoDefer}
+    />
+  );
+
+  // Paid items sit after every pending one, behind a quiet divider
+  const renderPaidLast = (list: DashboardItem[]) => {
+    const { pending, paid } = splitPaidLast(list);
+    return (
+      <>
+        {pending.map(renderItem)}
+        {paid.length > 0 && (
+          <div className="flex items-center gap-3 pt-2 text-xs uppercase tracking-wide text-zinc-500">
+            <span>Pagos</span>
+            <span className="h-px flex-1 bg-zinc-800" aria-hidden />
+          </div>
+        )}
+        {paid.map(renderItem)}
+      </>
+    );
+  };
+
+  const sortButtonClass =
+    "flex min-h-11 min-w-11 items-center gap-1 transition-colors hover:text-zinc-300 md:min-h-0 md:min-w-0";
+
   return (
     <div className="space-y-4">
       <div className="space-y-4 mt-8">
-        <div className="grid grid-cols-[4fr_2fr_2fr_1fr] gap-4 px-6 text-sm text-zinc-500 mb-2 select-none">
-          <div className="flex items-center gap-1 cursor-default">
+        <div className="flex items-center gap-4 px-4 text-sm text-zinc-500 mb-2 select-none md:grid md:grid-cols-[4fr_2fr_2fr_1fr] md:px-6">
+          <div className="hidden items-center gap-1 cursor-default md:flex">
             Descrição
           </div>
-          <div
-            className="flex items-center gap-1 cursor-pointer hover:text-zinc-300 transition-colors"
+          <button
+            type="button"
+            className={sortButtonClass}
             onClick={() => handleSort("amount")}
           >
             Valor
@@ -95,9 +131,10 @@ export function TransactionList({
               ) : (
                 <ArrowDown size={14} />
               ))}
-          </div>
-          <div
-            className="flex items-center gap-1 cursor-pointer hover:text-zinc-300 transition-colors"
+          </button>
+          <button
+            type="button"
+            className={sortButtonClass}
             onClick={() => handleSort("day")}
           >
             Data
@@ -107,8 +144,8 @@ export function TransactionList({
               ) : (
                 <ArrowDown size={14} />
               ))}
-          </div>
-          <div className="text-right pr-4">Parcelas</div>
+          </button>
+          <div className="hidden text-right pr-4 md:block">Parcelas</div>
         </div>
         {initialItems.length === 0 ? (
           <div className="text-center py-8 text-zinc-500">
@@ -116,52 +153,16 @@ export function TransactionList({
           </div>
         ) : viewMode === "grouped" ? (
           <>
-            {incomings.map((item) => (
-              <TransactionItem
-                key={item.id}
-                item={item}
-                isOpen={openItemId === item.id}
-                onToggle={() => handleToggle(item.id)}
-                onMarkAsPaid={onMarkAsPaid}
-                onDelete={onDelete}
-                onEdit={onEdit}
-                onDefer={onDefer}
-                onUndoDefer={onUndoDefer}
-              />
-            ))}
+            {incomings.map(renderItem)}
 
             {incomings.length > 0 && expenses.length > 0 && (
               <div className="border-t border-zinc-800 my-4" />
             )}
 
-            {expenses.map((item) => (
-              <TransactionItem
-                key={item.id}
-                item={item}
-                isOpen={openItemId === item.id}
-                onToggle={() => handleToggle(item.id)}
-                onMarkAsPaid={onMarkAsPaid}
-                onDelete={onDelete}
-                onEdit={onEdit}
-                onDefer={onDefer}
-                onUndoDefer={onUndoDefer}
-              />
-            ))}
+            {renderPaidLast(expenses)}
           </>
         ) : (
-          sortedItems.map((item) => (
-            <TransactionItem
-              key={item.id}
-              item={item}
-              isOpen={openItemId === item.id}
-              onToggle={() => handleToggle(item.id)}
-              onMarkAsPaid={onMarkAsPaid}
-              onDelete={onDelete}
-              onEdit={onEdit}
-              onDefer={onDefer}
-              onUndoDefer={onUndoDefer}
-            />
-          ))
+          renderPaidLast(sortedItems)
         )}
       </div>
     </div>

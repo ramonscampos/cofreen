@@ -24,7 +24,7 @@ export function CardPurchaseList({
 
   return (
     <div className="text-sm">
-      <div className="grid grid-cols-[4fr_1fr_2fr_2fr] gap-4 px-2 pb-2 text-zinc-500">
+      <div className="hidden grid-cols-[4fr_1fr_2fr_2fr] gap-4 px-2 pb-2 text-zinc-500 md:grid">
         <span>Descrição</span>
         <span>Data</span>
         <span>Categoria</span>
@@ -35,7 +35,7 @@ export function CardPurchaseList({
           <li
             key={purchase.id}
             className={cn(
-              "grid grid-cols-[4fr_1fr_2fr_2fr] gap-4 px-2 py-2 items-center rounded transition-opacity",
+              "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 rounded px-2 py-2 transition-opacity md:grid-cols-[4fr_1fr_2fr_2fr] md:gap-4",
               purchase.isForecast && "text-zinc-500",
               highlight &&
                 (highlight.includes(purchase.category)
@@ -43,7 +43,7 @@ export function CardPurchaseList({
                   : "opacity-30"),
             )}
           >
-            <span className="flex items-center gap-2 overflow-hidden">
+            <span className="col-start-1 row-start-1 flex items-center gap-2 overflow-hidden md:col-start-auto md:row-start-auto">
               <span
                 className={cn(
                   "truncate",
@@ -63,11 +63,15 @@ export function CardPurchaseList({
                 </span>
               )}
             </span>
-            <span className="text-zinc-500">{formatDay(purchase.date)}</span>
-            <span className="truncate text-zinc-400">{purchase.category}</span>
+            <span className="col-start-1 row-start-2 text-xs text-zinc-500 md:col-start-auto md:row-start-auto md:text-sm">
+              {formatDay(purchase.date)}
+            </span>
+            <span className="col-start-2 row-start-2 truncate text-right text-xs text-zinc-400 md:col-start-auto md:row-start-auto md:text-left md:text-sm">
+              {purchase.category}
+            </span>
             <span
               className={cn(
-                "text-right tabular-nums",
+                "col-start-2 row-start-1 text-right tabular-nums md:col-start-auto md:row-start-auto",
                 purchase.amount < 0 ? "text-[#00b37e]" : "text-zinc-200",
                 purchase.isForecast && "text-zinc-400",
               )}

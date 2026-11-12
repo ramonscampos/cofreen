@@ -40,15 +40,19 @@ export function Header() {
   };
 
   return (
-    <header className="relative w-full pt-8 mb-16">
+    <header className="relative w-full pt-[calc(2rem+env(safe-area-inset-top))] mb-16">
       {/* Background Layer - z-0 */}
       <div className="absolute inset-0 bg-[#121214] z-0" />
 
       {/* Content Layer - z-20 (above Cards) */}
       <div className="container mx-auto px-4 md:px-6 relative z-20">
-        <div className="flex items-center justify-between mb-12">
+        {/* Phones: logo and avatar on top, month switcher on its own row */}
+        <div className="relative mb-8 flex flex-wrap items-center justify-between gap-y-4 md:mb-12 md:flex-nowrap">
           <div className="flex items-center gap-4">
-            <Link href="/dashboard" className="flex items-center gap-2">
+            <Link
+              href="/dashboard"
+              className="flex min-h-11 items-center gap-2"
+            >
               <Image
                 src="/logo-inverse.svg"
                 alt="CoFreen"
@@ -60,7 +64,7 @@ export function Header() {
             </Link>
           </div>
 
-          <div className="absolute left-1/2 transform -translate-x-1/2">
+          <div className="order-last flex w-full justify-center md:absolute md:left-1/2 md:order-none md:w-auto md:-translate-x-1/2">
             <MonthSwitcher monthRef={monthRef} />
           </div>
 
@@ -68,6 +72,7 @@ export function Header() {
             <button
               type="button"
               onClick={() => setMenuOpen(!menuOpen)}
+              aria-label="Menu da conta"
               className="relative w-12 h-12 rounded-full overflow-hidden border-2 border-[#00875f] focus:outline-none transition-transform hover:scale-105"
             >
               {user?.image ? (
@@ -102,7 +107,7 @@ export function Header() {
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="flex items-center gap-2 px-4 py-2 text-sm text-red-500 hover:bg-[#29292e] transition-colors w-full text-left"
+                    className="flex min-h-11 items-center gap-2 px-4 py-2 text-sm text-red-500 hover:bg-[#29292e] transition-colors w-full text-left"
                   >
                     <LogOut className="w-4 h-4" />
                     Sair
