@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp } from "lucide-react";
 import { useState } from "react";
 import { splitPaidLast } from "@/lib/paid-last";
 import type { DashboardItem } from "@/types";
+import { PaidGroup } from "./paid-group";
 import { TransactionItem } from "./transaction-item";
 
 interface TransactionListProps {
@@ -14,6 +15,9 @@ interface TransactionListProps {
   onEdit: (item: DashboardItem) => void;
   onDefer: (item: DashboardItem) => void;
   onUndoDefer: (item: DashboardItem) => void;
+  // Owned by the parent so it survives month switches
+  paidOpen: boolean;
+  onPaidOpenChange: (open: boolean) => void;
 }
 
 export function TransactionList({
@@ -24,6 +28,8 @@ export function TransactionList({
   onEdit,
   onDefer,
   onUndoDefer,
+  paidOpen,
+  onPaidOpenChange,
 }: TransactionListProps) {
   const [openItemId, setOpenItemId] = useState<string | number | null>(null);
   const [sortBy, setSortBy] = useState<"day" | "amount">("day");
@@ -99,12 +105,14 @@ export function TransactionList({
       <>
         {pending.map(renderItem)}
         {paid.length > 0 && (
-          <div className="flex items-center gap-3 pt-2 text-xs uppercase tracking-wide text-zinc-500">
-            <span>Pagos</span>
-            <span className="h-px flex-1 bg-zinc-800" aria-hidden />
-          </div>
+          <PaidGroup
+            count={paid.length}
+            open={paidOpen}
+            onOpenChange={onPaidOpenChange}
+          >
+            {paid.map(renderItem)}
+          </PaidGroup>
         )}
-        {paid.map(renderItem)}
       </>
     );
   };

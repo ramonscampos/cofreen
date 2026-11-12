@@ -74,6 +74,9 @@ export function DashboardView({
   const [itemToDelete, setItemToDelete] = useState<DashboardItem | null>(null);
 
   // Grouped keeps incomes apart from expenses
+  // Closed on every page load; kept while switching months
+  const [paidOpen, setPaidOpen] = useState(false);
+
   const [viewMode, setViewMode] = useState<"mixed" | "grouped">("grouped");
 
   const view = useMemo(
@@ -305,6 +308,8 @@ export function DashboardView({
           onMarkAsPaid={handleMarkAsPaid}
           onDefer={handleDefer}
           onUndoDefer={handleUndoDefer}
+          paidOpen={paidOpen}
+          onPaidOpenChange={setPaidOpen}
         />
       </div>
 
