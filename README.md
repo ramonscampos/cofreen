@@ -34,3 +34,16 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## PWA icons
+
+The app icons in `public/icons/` are generated from the mascot in
+`public/logo.svg`:
+
+```bash
+node scripts/generate-icons.mjs
+```
+
+The script depends on `sharp`, which is not in `package.json`: it is only
+available as a transitive dependency of Next.js. Don't install it separately.
+The PNGs are committed, so you only need to run this when the logo changes.

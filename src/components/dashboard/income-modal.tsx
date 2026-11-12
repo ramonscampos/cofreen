@@ -231,7 +231,7 @@ export function IncomeModal({
               value={day}
               onChange={(e) => setDay(e.target.value.replace(/\D/g, ""))}
               required
-              className="bg-gray-1 border-none text-white h-10 w-20"
+              className="bg-gray-1 border-none text-white h-11 md:h-10 w-20"
             />
           </div>
         )}

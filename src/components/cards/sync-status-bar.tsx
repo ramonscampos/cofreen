@@ -56,7 +56,7 @@ export function SyncStatusBar({ status }: SyncStatusBarProps) {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-4 text-sm text-zinc-500">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 text-sm text-zinc-500">
         <span>
           {lastSuccess
             ? `Atualizado em ${format(lastSuccess, "dd/MM 'às' HH:mm", { locale: ptBR })}`
@@ -66,7 +66,7 @@ export function SyncStatusBar({ status }: SyncStatusBarProps) {
           type="button"
           onClick={handleSync}
           disabled={syncing}
-          className="flex items-center gap-2 text-zinc-300 hover:text-white disabled:opacity-60 transition-colors"
+          className="flex min-h-11 items-center gap-2 text-zinc-300 hover:text-white disabled:opacity-60 transition-colors"
         >
           <RefreshCw className={cn("h-4 w-4", syncing && "animate-spin")} />
           {syncing ? "Sincronizando..." : "Sincronizar agora"}

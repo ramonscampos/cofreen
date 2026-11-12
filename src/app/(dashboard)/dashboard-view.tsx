@@ -1,12 +1,17 @@
 "use client";
 
+import { useQueryClient } from "@tanstack/react-query";
 import { parse } from "date-fns";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { TransactionList } from "@/components/dashboard/transaction-list";
 import { Button } from "@/components/ui/button";
-import { useMonthData, useSeedMonthData } from "@/hooks/use-month-data";
+import {
+  MONTH_QUERY_ROOT,
+  useMonthData,
+  useSeedMonthData,
+} from "@/hooks/use-month-data";
 import { triggerTransactionUpdate } from "@/lib/events";
 import {
   buildPaidTemplateTransaction,
@@ -14,6 +19,12 @@ import {
 } from "@/lib/finance-logic";
 import type { MonthData } from "@/lib/month-data";
 import { buildMonthView } from "@/lib/month-view";
+import {
+  applyOptimisticPaid,
+  isOptimisticId,
+  isTemplateProjection,
+  revertOptimisticPaid,
+} from "@/lib/optimistic-paid";
 import { cn } from "@/lib/utils";
 import type { ActionResult, DashboardItem, Kind } from "@/types";
 
@@ -39,6 +50,7 @@ export function DashboardView({
   today,
 }: DashboardViewProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const searchParams = useSearchParams();
   const monthRef = normalizeMonthRef(
     searchParams.get("month"),
@@ -60,6 +72,9 @@ export function DashboardView({
 
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<DashboardItem | null>(null);
+
+  // Closed on every page load; kept while switching months
+  const [paidOpen, setPaidOpen] = useState(false);
 
   // Grouped keeps incomes apart from expenses
   const [viewMode, setViewMode] = useState<"mixed" | "grouped">("grouped");
@@ -145,36 +160,56 @@ export function DashboardView({
   };
 
   const handleMarkAsPaid = async (item: DashboardItem) => {
+    // Still being saved: wait for the real id before toggling again
+    if (item.transactionId && isOptimisticId(item.transactionId)) return;
+
     const { createTransactionAction, updateTransactionAction } = await import(
       "@/app/actions/transactions"
     );
+    const isProjection = isTemplateProjection(item);
 
-    if (item.originalTemplateId && !item.transactionId && !item.paid) {
-      // It's a template projection being paid. Create it as a real Transaction.
-      const result = await createTransactionAction(
-        buildPaidTemplateTransaction(item, monthRef),
-      );
-
-      if (result.success) {
-        toast.success("Transação recorrente paga!");
-        triggerTransactionUpdate();
-      } else {
-        toast.error("Erro ao processar transação recorrente");
-      }
-      return;
-    }
-
-    const result = await updateTransactionAction(
-      item.transactionId ?? item.id,
-      { paid: !item.paid },
+    // Stop in-flight fetches from overwriting the optimistic state, then show
+    // the item in its new group right away
+    const monthKey = [MONTH_QUERY_ROOT, monthRef];
+    await queryClient.cancelQueries({ queryKey: monthKey });
+    queryClient.setQueryData<MonthData>(monthKey, (current) =>
+      current ? applyOptimisticPaid(current, item, monthRef) : current,
     );
 
-    if (result.success) {
-      toast.success(item.paid ? "Marcado como não pago" : "Marcado como pago");
-      triggerTransactionUpdate();
-    } else {
-      toast.error("Erro ao atualizar status");
+    let result: ActionResult;
+    try {
+      result = isProjection
+        ? await createTransactionAction(
+            buildPaidTemplateTransaction(item, monthRef),
+          )
+        : await updateTransactionAction(item.transactionId ?? item.id, {
+            paid: !item.paid,
+          });
+    } catch {
+      result = { success: false, error: "Falha de rede" };
     }
+
+    if (result.success) {
+      toast.success(
+        isProjection
+          ? "Transação recorrente paga!"
+          : item.paid
+            ? "Marcado como não pago"
+            : "Marcado como pago",
+      );
+    } else {
+      // Undo just this item; the refresh below resyncs everything else
+      queryClient.setQueryData<MonthData>(monthKey, (current) =>
+        current ? revertOptimisticPaid(current, item) : current,
+      );
+      toast.error(
+        isProjection
+          ? "Erro ao processar transação recorrente"
+          : "Erro ao atualizar status",
+      );
+    }
+    // Success or not, refetch so the cache matches the server
+    triggerTransactionUpdate();
   };
 
   if (!view || !monthData) {
@@ -200,18 +235,18 @@ export function DashboardView({
     <div className="space-y-8 relative z-10">
       <BalanceCards balances={monthData.balances} />
 
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <div className="flex w-full items-center gap-3 sm:w-auto">
           <Button
             type="button"
-            className="bg-[#00875f] hover:bg-[#00875f]/90 text-white font-bold h-12 px-6"
+            className="h-12 flex-1 bg-[#00875f] px-4 font-bold text-white hover:bg-[#00875f]/90 sm:flex-none sm:px-6"
             onClick={() => openNewModal("incoming")}
           >
             Nova entrada
           </Button>
           <Button
             type="button"
-            className="bg-[#f75a68] hover:bg-[#f75a68]/90 text-white font-bold h-12 px-6"
+            className="h-12 flex-1 bg-[#f75a68] px-4 font-bold text-white hover:bg-[#f75a68]/90 sm:flex-none sm:px-6"
             onClick={() => openNewModal("expense")}
           >
             Nova despesa
@@ -220,7 +255,7 @@ export function DashboardView({
 
         <button
           type="button"
-          className="text-white font-bold text-sm hover:underline flex items-center gap-1 transition-colors"
+          className="flex min-h-11 items-center gap-1 text-sm font-bold text-white transition-colors hover:underline"
           onClick={() => router.push("/cards")}
         >
           Gerenciar cartões
@@ -234,12 +269,13 @@ export function DashboardView({
             type="button"
             onClick={() => setViewMode("mixed")}
             className={cn(
-              "p-1.5 rounded-md transition-all hover:text-white",
+              "flex h-11 w-11 items-center justify-center rounded-md transition-all hover:text-white md:h-auto md:w-auto md:p-1.5",
               viewMode === "mixed"
                 ? "bg-[#00875f] text-white shadow-sm"
                 : "text-zinc-400 hover:bg-zinc-800",
             )}
             title="Visualização mista"
+            aria-label="Visualização mista"
           >
             <List size={18} />
           </button>
@@ -247,12 +283,13 @@ export function DashboardView({
             type="button"
             onClick={() => setViewMode("grouped")}
             className={cn(
-              "p-1.5 rounded-md transition-all hover:text-white",
+              "flex h-11 w-11 items-center justify-center rounded-md transition-all hover:text-white md:h-auto md:w-auto md:p-1.5",
               viewMode === "grouped"
                 ? "bg-[#00875f] text-white shadow-sm"
                 : "text-zinc-400 hover:bg-zinc-800",
             )}
             title="Visualização agrupada"
+            aria-label="Visualização agrupada"
           >
             <Layers size={18} />
           </button>
@@ -271,6 +308,8 @@ export function DashboardView({
           onMarkAsPaid={handleMarkAsPaid}
           onDefer={handleDefer}
           onUndoDefer={handleUndoDefer}
+          paidOpen={paidOpen}
+          onPaidOpenChange={setPaidOpen}
         />
       </div>
 

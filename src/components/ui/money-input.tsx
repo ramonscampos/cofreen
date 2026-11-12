@@ -22,7 +22,7 @@ export const MoneyInput = React.forwardRef<HTMLInputElement, MoneyInputProps>(
           decimalSeparator=","
           groupSeparator="."
           className={cn(
-            "flex h-12 w-full rounded-md border border-zinc-800 bg-zinc-950 pl-9 pr-3 py-2 text-sm text-white placeholder:text-zinc-500 focus-visible:outline-none focus:border-[#00875f] disabled:cursor-not-allowed disabled:opacity-50 transition-colors",
+            "flex h-12 w-full rounded-md border border-zinc-800 bg-zinc-950 pl-9 pr-3 py-2 text-base text-white sm:text-sm placeholder:text-zinc-500 focus-visible:outline-none focus:border-[#00875f] disabled:cursor-not-allowed disabled:opacity-50 transition-colors",
             className,
           )}
           onValueChange={onValueChange}

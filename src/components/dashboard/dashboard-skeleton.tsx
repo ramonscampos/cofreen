@@ -7,13 +7,12 @@ const LIST_ROWS = ["row-1", "row-2", "row-3", "row-4", "row-5", "row-6"];
 // Mirrors the dashboard layout so content doesn't jump when it arrives
 export function DashboardSkeleton() {
   return (
-    <div
-      className="space-y-8"
-      role="status"
+    <output
+      className="block space-y-8"
       aria-busy="true"
       aria-label="Carregando mês"
     >
-      <div className="grid gap-8 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 md:gap-8">
         {[0, 1].map((card) => (
           <div key={card} className="rounded-lg bg-[#323238] p-6 space-y-4">
             <Skeleton className="h-4 w-24" />
@@ -25,8 +24,8 @@ export function DashboardSkeleton() {
       </div>
 
       <div className="flex items-center gap-3">
-        <Skeleton className="h-12 w-36" />
-        <Skeleton className="h-12 w-36" />
+        <Skeleton className="h-12 flex-1 sm:w-36 sm:flex-none" />
+        <Skeleton className="h-12 flex-1 sm:w-36 sm:flex-none" />
       </div>
 
       <div className="space-y-3">
@@ -47,15 +46,15 @@ export function DashboardSkeleton() {
         {LIST_ROWS.map((row) => (
           <div
             key={row}
-            className="grid min-h-16 grid-cols-[4fr_2fr_2fr_1fr] items-center gap-4 rounded-md bg-[#29292e] px-4"
+            className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-md bg-[#29292e] px-3 md:grid-cols-[4fr_2fr_2fr_1fr] md:px-4"
           >
             <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-8" />
-            <span />
+            <Skeleton className="h-4 w-20 md:w-24" />
+            <Skeleton className="hidden h-4 w-8 md:block" />
+            <span className="hidden md:block" />
           </div>
         ))}
       </div>
-    </div>
+    </output>
   );
 }

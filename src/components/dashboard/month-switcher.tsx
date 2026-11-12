@@ -24,15 +24,32 @@ export function MonthSwitcher({ monthRef }: MonthSwitcherProps) {
   const handleNext = () => goTo(getNextMonthRef(monthRef));
 
   return (
-    <div className="flex items-center gap-2 text-gray-6">
-      <Button type="button" variant="ghost" size="icon" onClick={handlePrev}>
-        <ChevronLeft className="h-4 w-4" />
+    <div className="flex items-center gap-1 text-gray-6 sm:gap-2">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-11 w-11"
+        aria-label="Mês anterior"
+        onClick={handlePrev}
+      >
+        <ChevronLeft className="h-5 w-5" />
       </Button>
-      <span className="text-base font-bold capitalize min-w-35 text-center">
+      <span
+        aria-live="polite"
+        className="min-w-36 whitespace-nowrap text-center text-base font-bold capitalize"
+      >
         {formatMonthDisplay(monthRef)}
       </span>
-      <Button type="button" variant="ghost" size="icon" onClick={handleNext}>
-        <ChevronRight className="h-4 w-4" />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-11 w-11"
+        aria-label="Próximo mês"
+        onClick={handleNext}
+      >
+        <ChevronRight className="h-5 w-5" />
       </Button>
     </div>
   );

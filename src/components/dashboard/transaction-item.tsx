@@ -125,7 +125,7 @@ export function TransactionItem({
     <div className="relative w-full mb-2">
       <div
         className={cn(
-          "absolute inset-y-0 right-0 flex h-16 gap-1 transition-opacity duration-300",
+          "absolute inset-y-0 right-0 flex h-full gap-1 transition-opacity duration-300",
           !isOpen && "opacity-0 pointer-events-none",
         )}
         style={{ width: `${actionsWidth}rem` }}
@@ -164,7 +164,7 @@ export function TransactionItem({
       >
         <div
           className={cn(
-            "min-h-16 items-center px-4 gap-4 grid grid-cols-[4fr_2fr_2fr_1fr] w-full transition-all",
+            "grid min-h-16 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 px-3 py-2 transition-all md:grid-cols-[4fr_2fr_2fr_1fr] md:gap-4 md:px-4 md:py-0",
             (isPaidExpense || isDeferred) && "opacity-50 grayscale",
           )}
         >
@@ -179,7 +179,7 @@ export function TransactionItem({
 
           <div
             className={cn(
-              "font-bold truncate",
+              "font-bold truncate text-right md:text-left",
               isExpense ? "text-[#f75a68]" : "text-[#00b37e]",
             )}
           >
@@ -187,11 +187,12 @@ export function TransactionItem({
             {amount}
           </div>
 
-          <div className="text-zinc-500 truncate">
+          <div className="text-sm text-zinc-500 truncate md:text-base">
+            <span className="md:hidden">Dia </span>
             {item.day ? String(item.day).padStart(2, "0") : "-"}
           </div>
 
-          <div className="flex items-center justify-end pr-4 text-zinc-500">
+          <div className="flex items-center justify-end text-zinc-500 md:pr-4">
             {item.isRecurring && <Repeat className="h-4 w-4 rotate-90" />}
 
             {!item.isRecurring &&

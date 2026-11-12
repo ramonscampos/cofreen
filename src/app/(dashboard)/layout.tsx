@@ -11,11 +11,15 @@ export default function DashboardLayout({
   return (
     <AuthProvider>
       <QueryProvider>
-        <div className="min-h-screen bg-gray-2 text-white">
-          <Suspense fallback={<div className="h-20 bg-[#121214]" />}>
+        <div className="min-h-dvh bg-gray-2 pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] text-white">
+          <Suspense
+            fallback={
+              <div className="h-20 bg-[#121214] pt-[env(safe-area-inset-top)]" />
+            }
+          >
             <Header />
           </Suspense>
-          <main className="container mx-auto px-4 py-8 md:px-6">
+          <main className="container mx-auto px-4 pt-8 pb-[calc(2rem+env(safe-area-inset-bottom))] md:px-6">
             {children}
           </main>
         </div>

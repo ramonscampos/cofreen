@@ -19,6 +19,7 @@ describe("institutionLabel", () => {
       "Nubank PF",
     );
     expect(institutionLabel(["Banco Bradesco"], null)).toBe("Bradesco");
+    expect(institutionLabel(["itaubba"], "12.345.678/0001-90")).toBe("Itaú PJ");
   });
 });
 
@@ -114,6 +115,9 @@ describe("detectBank", () => {
     expect(detectBank(["Nu Pagamentos S.A."])).toBe("Nubank");
     expect(detectBank(["Banco Bradesco"])).toBe("Bradesco");
     expect(detectBank(["Banco Inter"])).toBe("Banco Inter");
+    expect(detectBank(["itaubba PJ"])).toBe("Itaú");
+    expect(detectBank(["Itaú Unibanco S.A."])).toBe("Itaú");
+    expect(detectBank(["ITAU"])).toBe("Itaú");
   });
 });
 
