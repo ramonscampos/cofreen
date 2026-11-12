@@ -20,7 +20,7 @@ export function detectBank(bankAccountNames: string[]): string {
   const names = bankAccountNames.join(" ");
   if (/nu pagamentos|nubank/i.test(names)) return "Nubank";
   if (/bradesco/i.test(names)) return "Bradesco";
-  if (/ita[uú]/i.test(names)) return "Itaú";
+  if (/\bita[uú]/i.test(names)) return "Itaú";
   return bankAccountNames[0] ?? "Banco";
 }
 

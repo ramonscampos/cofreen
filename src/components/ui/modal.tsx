@@ -49,7 +49,6 @@ export function Modal({
             className="-m-3 flex h-11 w-11 shrink-0 items-center justify-center rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-zinc-800 data-[state=open]:text-zinc-500"
           >
             <X className="h-4 w-4 text-zinc-400" />
-            <span className="sr-only">Fechar</span>
           </button>
         </div>
         <div className="overflow-y-auto p-4 sm:p-6">{children}</div>

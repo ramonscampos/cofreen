@@ -48,8 +48,9 @@ export function PaidGroup({
         )}
       >
         {/* inert keeps hidden rows out of the tab order and the a11y tree */}
-        <div className="min-h-0 overflow-hidden" inert={!open}>
-          <div className="space-y-4 pt-2">{children}</div>
+        {/* -mx-1/px-1/pb-1 leave room for focus rings the overflow would clip */}
+        <div className="-mx-1 min-h-0 overflow-hidden px-1" inert={!open}>
+          <div className="space-y-4 pb-1 pt-2">{children}</div>
         </div>
       </div>
     </div>

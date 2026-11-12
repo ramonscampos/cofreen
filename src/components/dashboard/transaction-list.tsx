@@ -108,7 +108,11 @@ export function TransactionList({
           <PaidGroup
             count={paid.length}
             open={paidOpen}
-            onOpenChange={onPaidOpenChange}
+            onOpenChange={(open) => {
+              // A row left open would stay slid open while hidden
+              if (!open) setOpenItemId(null);
+              onPaidOpenChange(open);
+            }}
           >
             {paid.map(renderItem)}
           </PaidGroup>
