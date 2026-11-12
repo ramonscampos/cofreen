@@ -19,6 +19,12 @@ import {
 } from "@/lib/finance-logic";
 import type { MonthData } from "@/lib/month-data";
 import { buildMonthView } from "@/lib/month-view";
+import {
+  applyOptimisticPaid,
+  isOptimisticId,
+  isTemplateProjection,
+  revertOptimisticPaid,
+} from "@/lib/optimistic-paid";
 import { cn } from "@/lib/utils";
 import type { ActionResult, DashboardItem, Kind } from "@/types";
 
@@ -151,54 +157,56 @@ export function DashboardView({
   };
 
   const handleMarkAsPaid = async (item: DashboardItem) => {
+    // Still being saved: wait for the real id before toggling again
+    if (item.transactionId && isOptimisticId(item.transactionId)) return;
+
     const { createTransactionAction, updateTransactionAction } = await import(
       "@/app/actions/transactions"
     );
+    const isProjection = isTemplateProjection(item);
 
-    if (item.originalTemplateId && !item.transactionId && !item.paid) {
-      // It's a template projection being paid. Create it as a real Transaction.
-      const result = await createTransactionAction(
-        buildPaidTemplateTransaction(item, monthRef),
-      );
-
-      if (result.success) {
-        toast.success("Transação recorrente paga!");
-        triggerTransactionUpdate();
-      } else {
-        toast.error("Erro ao processar transação recorrente");
-      }
-      return;
-    }
-
-    // Flip it in the cache first so the item changes group right away
-    const transactionId = item.transactionId ?? item.id;
+    // Stop in-flight fetches from overwriting the optimistic state, then show
+    // the item in its new group right away
     const monthKey = [MONTH_QUERY_ROOT, monthRef];
-    const previous = queryClient.getQueryData<MonthData>(monthKey);
+    await queryClient.cancelQueries({ queryKey: monthKey });
     queryClient.setQueryData<MonthData>(monthKey, (current) =>
-      current
-        ? {
-            ...current,
-            transactions: current.transactions.map((t) =>
-              t.id === transactionId ? { ...t, paid: !item.paid } : t,
-            ),
-          }
-        : current,
+      current ? applyOptimisticPaid(current, item, monthRef) : current,
     );
 
-    const result = await updateTransactionAction(transactionId, {
-      paid: !item.paid,
-    });
-
-    if (!result.success && previous) {
-      queryClient.setQueryData(monthKey, previous);
+    let result: ActionResult;
+    try {
+      result = isProjection
+        ? await createTransactionAction(
+            buildPaidTemplateTransaction(item, monthRef),
+          )
+        : await updateTransactionAction(item.transactionId ?? item.id, {
+            paid: !item.paid,
+          });
+    } catch {
+      result = { success: false, error: "Falha de rede" };
     }
 
     if (result.success) {
-      toast.success(item.paid ? "Marcado como não pago" : "Marcado como pago");
-      triggerTransactionUpdate();
+      toast.success(
+        isProjection
+          ? "Transação recorrente paga!"
+          : item.paid
+            ? "Marcado como não pago"
+            : "Marcado como pago",
+      );
     } else {
-      toast.error("Erro ao atualizar status");
+      // Undo just this item; the refresh below resyncs everything else
+      queryClient.setQueryData<MonthData>(monthKey, (current) =>
+        current ? revertOptimisticPaid(current, item) : current,
+      );
+      toast.error(
+        isProjection
+          ? "Erro ao processar transação recorrente"
+          : "Erro ao atualizar status",
+      );
     }
+    // Success or not, refetch so the cache matches the server
+    triggerTransactionUpdate();
   };
 
   if (!view || !monthData) {

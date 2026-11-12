@@ -1,6 +1,14 @@
 // Builds the PWA icons from the mascot in public/logo.svg.
 // The logo draws the face with SVG-font glyphs, which rasterizers skip, so the
 // glyph outlines are read from the logo and drawn as plain paths.
+//
+// Dependency: this script imports `sharp`, which is NOT listed in package.json.
+// It is available only as a transitive dependency of Next.js (image
+// optimization). Do not add it to package.json for this script; if a Next
+// upgrade drops it, `node_modules/sharp` will be missing and the script fails.
+// The generated PNGs are committed, so it only needs to run when the logo or
+// icon sizes change.
+//
 // Usage: node scripts/generate-icons.mjs
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";

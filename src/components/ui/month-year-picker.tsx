@@ -118,13 +118,13 @@ export function MonthYearPicker({
           placeholder={placeholder}
           value={inputValue}
           onChange={handleInputChange}
-          className="pl-10 h-12 bg-gray-1 border-none text-white placeholder:text-gray-5"
+          className="pl-11 h-12 bg-gray-1 border-none text-white placeholder:text-gray-5"
         />
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="absolute left-0 top-0 h-12 w-10 text-gray-5 hover:text-white hover:bg-transparent"
+          className="absolute left-0 top-0 h-12 w-11 text-gray-5 hover:text-white hover:bg-transparent"
           onClick={() => setIsOpen(!isOpen)}
         >
           <CalendarIcon className="h-4 w-4" />
@@ -137,7 +137,7 @@ export function MonthYearPicker({
             <button
               type="button"
               onClick={() => changeYear(-1)}
-              className="p-1 text-gray-400 hover:text-white"
+              className="-m-2 p-3 text-gray-400 hover:text-white md:m-0 md:p-1"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -147,7 +147,7 @@ export function MonthYearPicker({
             <button
               type="button"
               onClick={() => changeYear(1)}
-              className="p-1 text-gray-400 hover:text-white"
+              className="-m-2 p-3 text-gray-400 hover:text-white md:m-0 md:p-1"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -165,7 +165,7 @@ export function MonthYearPicker({
                   key={month}
                   onClick={() => handleMonthSelect(index)}
                   className={cn(
-                    "text-sm py-2 rounded transition-colors",
+                    "text-sm py-3 md:py-2 rounded transition-colors",
                     isSelected
                       ? "bg-green text-white font-medium"
                       : "text-gray-300 hover:bg-zinc-800 hover:text-white",
@@ -180,7 +180,7 @@ export function MonthYearPicker({
 
           <button
             type="button"
-            className="w-full mt-4 text-xs text-green hover:underline text-center"
+            className="mt-4 min-h-11 w-full text-center text-xs text-green hover:underline md:min-h-0"
             onClick={() => {
               const now = new Date();
               onChange(now);
