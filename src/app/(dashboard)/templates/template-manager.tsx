@@ -103,6 +103,8 @@ export function TemplateManager({ initialTemplates }: TemplateManagerProps) {
                 type="button"
                 size="sm"
                 variant="ghost"
+                aria-label={`Editar ${template.description}`}
+                className="h-11 w-11 px-0 md:h-9 md:w-auto md:px-3"
                 onClick={() => handleEdit(template)}
               >
                 <Pencil className="h-4 w-4" />
@@ -111,7 +113,8 @@ export function TemplateManager({ initialTemplates }: TemplateManagerProps) {
                 type="button"
                 size="sm"
                 variant="ghost"
-                className="text-red-500 hover:text-red-400"
+                aria-label={`Excluir ${template.description}`}
+                className="h-11 w-11 px-0 text-red-500 hover:text-red-400 md:h-9 md:w-auto md:px-3"
                 onClick={() => handleDelete(template)}
               >
                 <Trash2 className="h-4 w-4" />

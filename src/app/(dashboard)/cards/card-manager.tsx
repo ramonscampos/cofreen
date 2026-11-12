@@ -21,7 +21,7 @@ export function CardManager({ initialCards }: CardManagerProps) {
         <button
           type="button"
           onClick={() => router.push("/dashboard")}
-          className="flex items-center gap-2 text-zinc-100 font-bold hover:text-white transition-colors"
+          className="flex min-h-11 items-center gap-2 font-bold text-zinc-100 transition-colors hover:text-white md:min-h-0"
         >
           <ChevronLeft className="h-5 w-5" />
           Dashboard
@@ -47,7 +47,7 @@ export function CardManager({ initialCards }: CardManagerProps) {
             <button
               type="button"
               onClick={() => setEditingCard(card)}
-              className="p-2 rounded-md hover:bg-zinc-700 transition-colors"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-zinc-700 md:h-9 md:w-9"
               aria-label={`Editar ${card.bankName}`}
             >
               <Pencil className="h-5 w-5 text-zinc-300" />

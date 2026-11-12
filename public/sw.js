@@ -1,7 +1,8 @@
 // Minimal service worker: it only makes the app installable and shows a simple
 // offline page when a page load fails. It never caches pages, API responses or
 // server actions, so financial data always comes fresh from the network.
-const CACHE = "cofreen-offline-v1";
+// Bump the version whenever offline.html changes so installed apps refresh it
+const CACHE = "cofreen-offline-v2";
 const OFFLINE_URL = "/offline.html";
 
 self.addEventListener("install", (event) => {
