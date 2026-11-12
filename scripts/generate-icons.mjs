@@ -10,7 +10,7 @@
 // icon sizes change.
 //
 // Usage: node scripts/generate-icons.mjs
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
@@ -30,8 +30,12 @@ if (!glyph || paths.length === 0) {
 }
 const fillFor = (cls) => (cls === "fil2" ? LIGHT : DARK);
 
-// Mascot bounds in logo coordinates (ears at the top, face below)
-const MASCOT = { x: 1740, y: 0, size: 880 };
+// Mascot bounding box in logo coordinates, measured from the rendered paths
+// (ears at the top, face below). Icons are centred on it.
+const MASCOT = { minX: 1699, maxX: 2607, minY: 0, maxY: 863 };
+const MASCOT_SIZE = Math.max(MASCOT.maxX - MASCOT.minX, MASCOT.maxY - MASCOT.minY);
+const CENTER_X = (MASCOT.minX + MASCOT.maxX) / 2;
+const CENTER_Y = (MASCOT.minY + MASCOT.maxY) / 2;
 
 function mascotSvg() {
   const eyes = `
@@ -45,9 +49,9 @@ function mascotSvg() {
 
 // `fill` is the share of the icon the mascot may take up
 function iconSvg(fill) {
-  const size = MASCOT.size / fill;
-  const x = MASCOT.x - (size - MASCOT.size) / 2;
-  const y = MASCOT.y - (size - MASCOT.size) / 2;
+  const size = MASCOT_SIZE / fill;
+  const x = CENTER_X - size / 2;
+  const y = CENTER_Y - size / 2;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${y} ${size} ${size}">
     <rect x="${x}" y="${y}" width="${size}" height="${size}" fill="${BACKGROUND}"/>
     ${mascotSvg()}
@@ -63,11 +67,35 @@ const targets = [
   { file: "icons/apple-touch-icon.png", size: 180, fill: 0.7 },
 ];
 
-for (const { file, size, fill } of targets) {
-  await sharp(Buffer.from(iconSvg(fill)), { density: 300 })
+const render = (size, fill) =>
+  sharp(Buffer.from(iconSvg(fill)), { density: 300 })
     .resize(size, size)
     .flatten({ background: BACKGROUND })
     .png()
-    .toFile(join(root, "public", file));
+    .toBuffer();
+
+for (const { file, size, fill } of targets) {
+  writeFileSync(join(root, "public", file), await render(size, fill));
   console.log(`public/${file}`);
 }
+
+// favicon.ico with PNG entries (16, 32, 48); sharp can't write ICO itself
+const FAVICON_SIZES = [16, 32, 48];
+const images = await Promise.all(FAVICON_SIZES.map((s) => render(s, 0.86)));
+const header = Buffer.alloc(6 + 16 * images.length);
+header.writeUInt16LE(0, 0);
+header.writeUInt16LE(1, 2);
+header.writeUInt16LE(images.length, 4);
+let offset = header.length;
+images.forEach((png, i) => {
+  const entry = 6 + 16 * i;
+  header.writeUInt8(FAVICON_SIZES[i], entry);
+  header.writeUInt8(FAVICON_SIZES[i], entry + 1);
+  header.writeUInt16LE(1, entry + 4);
+  header.writeUInt16LE(32, entry + 6);
+  header.writeUInt32LE(png.length, entry + 8);
+  header.writeUInt32LE(offset, entry + 12);
+  offset += png.length;
+});
+writeFileSync(join(root, "src/app/favicon.ico"), Buffer.concat([header, ...images]));
+console.log("src/app/favicon.ico");
