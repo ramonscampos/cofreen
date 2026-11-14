@@ -8,6 +8,7 @@ import {
   startOfDay,
 } from "date-fns";
 import type { Card, CardBill, CardTransaction } from "@/types";
+import { billMonthForDate } from "./bill-cycle";
 
 export type CardBillStatus =
   | "paid"
@@ -120,6 +121,10 @@ function summarizeCategories(purchases: CardPurchaseView[]) {
     .map(([category, amount]) => ({ category, amount }))
     .sort((a, b) => b.amount - a.amount);
 }
+
+// Pluggy lists placeholder bills with a zero total; they say nothing about the month
+const isRealBill = (bill: CardBill) =>
+  Number(bill.totalAmount) !== 0 || bill.hasPaymentInfo;
 
 function billStatus(bill: CardBill, today: Date): CardBillStatus {
   const total = Number(bill.totalAmount);
@@ -276,7 +281,9 @@ export function buildCardBillView({
   monthRef,
   today,
 }: BuildCardBillViewInput): CardBillView {
-  const cardBills = bills.filter((bill) => bill.cardId === card.id);
+  const cardBills = bills.filter(
+    (bill) => bill.cardId === card.id && isRealBill(bill),
+  );
   const cardTransactions = transactions.filter((tx) => tx.cardId === card.id);
   const empty: CardBillView = {
     card,
@@ -309,8 +316,10 @@ export function buildCardBillView({
     };
   }
 
-  // The open bill is the one right after the latest closed bill. Later months
-  // are forecasts, even when Pluggy already lists future installments there.
+  // The open bill is the one that closes next, by the card's closing day.
+  // Cards whose open bill comes from the balance (Nubank) and cards without a
+  // closing day use the month after the latest bill. Later months are
+  // forecasts, even when Pluggy already lists future installments there.
   const latestBillMonth = cardBills
     .map((b) => b.monthRef)
     .sort()
@@ -319,9 +328,12 @@ export function buildCardBillView({
     .map((tx) => tx.monthRef)
     .sort()
     .at(-1);
-  const openMonth = latestBillMonth
-    ? format(addMonths(parseMonth(latestBillMonth), 1), "yyyy-MM")
-    : null;
+  const openMonth =
+    card.closingDay !== null && card.openBillSource === "transactions"
+      ? billMonthForDate(today, card.closingDay, card.dueDay)
+      : latestBillMonth
+        ? format(addMonths(parseMonth(latestBillMonth), 1), "yyyy-MM")
+        : null;
   const isForecastMonth = openMonth
     ? monthRef > openMonth
     : !!latestTransactionMonth && monthRef > latestTransactionMonth;
@@ -329,6 +341,24 @@ export function buildCardBillView({
   if (!isForecastMonth) {
     if (monthPurchases.length === 0 && monthRef !== openMonth) return empty;
     const purchasesTotal = sum(monthPurchases);
+
+    // Closed by the calendar, but Pluggy has not delivered its bill yet
+    if (openMonth && monthRef < openMonth) {
+      const dueDate = dueDateFor(monthRef, card.dueDay);
+      const pastDue = isBefore(
+        parse(dueDate, "yyyy-MM-dd", new Date()),
+        startOfDay(today),
+      );
+      return {
+        ...empty,
+        status: pastDue ? "paid_inferred" : "closed",
+        amount: purchasesTotal,
+        dueDate,
+        purchases: monthPurchases,
+        categories: summarizeCategories(monthPurchases),
+      };
+    }
+
     const useBalance =
       monthRef === openMonth &&
       card.openBillSource === "balance" &&
