@@ -547,3 +547,173 @@ describe("categories", () => {
     ]);
   });
 });
+
+describe("open bill by closing day", () => {
+  const bradesco: Card = {
+    ...card,
+    id: "card-brad",
+    bankName: "Bradesco",
+    dueDay: 15,
+    closingDay: 2,
+  };
+  const nov14 = new Date(2026, 10, 14);
+  const bradescoTx = (purchaseDate: string, amount: string) =>
+    tx({
+      cardId: bradesco.id,
+      monthRef: "2026-12",
+      purchaseDate,
+      amount,
+      description: `Compra ${purchaseDate}`,
+    });
+  const octBill = bill({
+    cardId: bradesco.id,
+    monthRef: "2026-10",
+    dueDate: "2026-10-15",
+    hasPaymentInfo: true,
+    paidAmount: "1000",
+  });
+  const input = {
+    card: bradesco,
+    bills: [octBill],
+    transactions: [
+      bradescoTx("2026-11-04", "500.40"),
+      bradescoTx("2026-11-06", "620.40"),
+      tx({
+        cardId: bradesco.id,
+        monthRef: "2026-11",
+        purchaseDate: "2026-10-20",
+        amount: "300",
+      }),
+    ],
+    today: nov14,
+  };
+
+  it("opens December when Pluggy has not delivered the November bill", () => {
+    const view = buildCardBillView({ ...input, monthRef: "2026-12" });
+    expect(view.status).toBe("open");
+    expect(view.amount).toBeCloseTo(1120.8);
+    expect(view.purchases.every((p) => !p.isForecast)).toBe(true);
+  });
+
+  it("shows November as closed, not open", () => {
+    const view = buildCardBillView({ ...input, monthRef: "2026-11" });
+    expect(view.status).toBe("closed");
+    expect(view.dueDate).toBe("2026-11-15");
+  });
+
+  it("shows January as forecast", () => {
+    const view = buildCardBillView({ ...input, monthRef: "2027-01" });
+    expect(view.status).toBe("forecast");
+  });
+
+  it("opens the next bill on the closing day itself", () => {
+    const view = buildCardBillView({
+      ...input,
+      monthRef: "2026-12",
+      today: new Date(2026, 10, 2),
+    });
+    expect(view.status).toBe("open");
+  });
+
+  it("keeps the latest bill + 1 for cards whose open bill is the balance", () => {
+    const view = buildCardBillView({
+      ...input,
+      card: { ...bradesco, openBillSource: "balance", balance: "1120.80" },
+      monthRef: "2026-11",
+    });
+    expect(view.status).toBe("open");
+  });
+
+  it("falls back to the latest bill without a closing day", () => {
+    const view = buildCardBillView({
+      ...input,
+      card: { ...bradesco, closingDay: null },
+      monthRef: "2026-11",
+    });
+    expect(view.status).toBe("open");
+  });
+});
+
+describe("placeholder bills with zero total", () => {
+  const itau: Card = {
+    ...card,
+    id: "card-itau",
+    bankName: "Itaú",
+    dueDay: 15,
+    closingDay: 5,
+  };
+  const zero = (monthRef: string) =>
+    bill({
+      cardId: itau.id,
+      monthRef,
+      dueDate: `${monthRef}-17`,
+      totalAmount: "0",
+      hasPaymentInfo: false,
+    });
+  const real = bill({
+    cardId: itau.id,
+    monthRef: "2026-10",
+    dueDate: "2026-10-15",
+    totalAmount: "800",
+    hasPaymentInfo: true,
+    paidAmount: "800",
+  });
+  const nov14 = new Date(2026, 10, 14);
+  const bills = [real, zero("2026-11"), zero("2026-12"), zero("2027-01")];
+  const transactions = [
+    tx({
+      cardId: itau.id,
+      monthRef: "2026-12",
+      purchaseDate: "2026-11-05",
+      amount: "1000.17",
+    }),
+    tx({
+      cardId: itau.id,
+      monthRef: "2026-12",
+      purchaseDate: "2026-11-13",
+      amount: "1980",
+    }),
+  ];
+
+  it("does not let them set the month status or amount", () => {
+    const view = buildCardBillView({
+      card: itau,
+      bills,
+      transactions,
+      monthRef: "2026-12",
+      today: nov14,
+    });
+    expect(view.status).toBe("open");
+    expect(view.amount).toBeCloseTo(2980.17);
+  });
+
+  it("does not move the open month to the last placeholder", () => {
+    const view = buildCardBillView({
+      card: { ...itau, closingDay: null },
+      bills,
+      transactions,
+      monthRef: "2026-11",
+      today: nov14,
+    });
+    expect(view.status).toBe("open");
+  });
+
+  it("keeps a zero bill that has payments", () => {
+    const paidZero = bill({
+      cardId: itau.id,
+      monthRef: "2026-11",
+      dueDate: "2026-11-15",
+      totalAmount: "0",
+      hasPaymentInfo: true,
+      paidAmount: "0",
+    });
+    const view = buildCardBillView({
+      card: itau,
+      bills: [real, paidZero],
+      transactions: [],
+      monthRef: "2026-11",
+      today: nov14,
+    });
+    expect(view.status).toBe("paid");
+  });
+});

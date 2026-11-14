@@ -59,6 +59,63 @@ describe("resolveBillMonth", () => {
     ).toBe("2026-12");
   });
 
+  it("ignores a bill that closed before the purchase", () => {
+    const itau = { closingDay: 5, dueDay: 15 };
+    expect(
+      resolveBillMonth({
+        billForecastDate: "2026-11",
+        purchaseDate: "2026-11-05",
+        ...itau,
+      }),
+    ).toBe("2026-12");
+    expect(
+      resolveBillMonth({
+        billDueDate: "2026-11-15T00:00:00",
+        purchaseDate: "2026-11-13",
+        ...itau,
+      }),
+    ).toBe("2026-12");
+  });
+
+  it("keeps the Pluggy bill when it is not earlier than the closing day says", () => {
+    expect(
+      resolveBillMonth({
+        billForecastDate: "2026-11",
+        purchaseDate: "2026-11-04",
+        closingDay: 5,
+        dueDay: 15,
+      }),
+    ).toBe("2026-11");
+    expect(
+      resolveBillMonth({
+        billForecastDate: "2027-01",
+        purchaseDate: "2026-11-13",
+        closingDay: 5,
+        dueDay: 15,
+      }),
+    ).toBe("2027-01");
+  });
+
+  it("keeps Pluggy's bill for purchases before the latest closing day", () => {
+    // Bradesco closes between the 2nd and the 5th
+    const bradesco = { closingDay: 5, dueDay: 15 };
+    for (const day of ["02", "03"]) {
+      expect(
+        resolveBillMonth({
+          billForecastDate: "2026-11-15",
+          purchaseDate: `2026-11-${day}`,
+          ...bradesco,
+        }),
+      ).toBe("2026-11");
+    }
+    expect(
+      resolveBillMonth({
+        purchaseDate: "2026-11-04",
+        ...bradesco,
+      }),
+    ).toBe("2026-11");
+  });
+
   it("falls back to purchase month without closing day", () => {
     expect(
       resolveBillMonth({
@@ -197,6 +254,23 @@ describe("mapTransaction", () => {
   });
 });
 
+describe("mapTransaction with a wrong billForecastDate", () => {
+  it("puts purchases made on or after closing in the next month", () => {
+    const itau = { billsById: new Map(), closingDay: 5, dueDay: 15 };
+    for (const day of ["05", "09", "13"]) {
+      const mapped = mapTransaction(
+        tx({
+          id: `t${day}`,
+          date: `2026-11-${day}T00:00:00.000Z`,
+          creditCardMetadata: { billForecastDate: "2026-11-15" },
+        }),
+        itau,
+      );
+      expect(mapped?.monthRef).toBe("2026-12");
+    }
+  });
+});
+
 describe("mapBill", () => {
   it("reads payments", () => {
     expect(
@@ -232,16 +306,125 @@ describe("mapBill", () => {
 describe("deriveCardDays", () => {
   it("uses the most recent bill", () => {
     expect(
-      deriveCardDays([
-        { id: "a", dueDate: "2026-10-15T00:00:00", totalAmount: 1 },
-        {
-          id: "b",
-          dueDate: "2026-11-23T00:00:00",
-          billClosingDate: "2026-11-16T00:00:00",
-          totalAmount: 1,
-        },
-      ]),
+      deriveCardDays(
+        [
+          { id: "a", dueDate: "2026-10-15T00:00:00", totalAmount: 1 },
+          {
+            id: "b",
+            dueDate: "2026-11-23T00:00:00",
+            billClosingDate: "2026-11-16T00:00:00",
+            totalAmount: 1,
+          },
+        ],
+        null,
+        new Date(2026, 10, 14),
+      ),
     ).toEqual({ dueDay: 23, closingDay: 16 });
+  });
+
+  it("ignores zero and future placeholder bills", () => {
+    const now = new Date(2026, 10, 14);
+    const zero = (due: string): PluggyBill => ({
+      id: due,
+      dueDate: `${due}T00:00:00`,
+      billClosingDate: `${due.slice(0, 8)}05T00:00:00`,
+      totalAmount: 0,
+    });
+    expect(
+      deriveCardDays(
+        [
+          {
+            id: "oct",
+            dueDate: "2026-10-16T00:00:00",
+            billClosingDate: "2026-10-05T00:00:00",
+            totalAmount: 800,
+          },
+          zero("2026-11-17"),
+          zero("2030-06-17"),
+          {
+            id: "future",
+            dueDate: "2027-03-17T00:00:00",
+            billClosingDate: "2027-03-08T00:00:00",
+            totalAmount: 50,
+          },
+        ],
+        null,
+        now,
+      ),
+    ).toEqual({ dueDay: 16, closingDay: 5 });
+  });
+
+  it("uses the latest closing day among the recent real bills", () => {
+    const bill = (due: string, closing: string): PluggyBill => ({
+      id: due,
+      dueDate: `${due}T00:00:00`,
+      billClosingDate: `${closing}T00:00:00`,
+      totalAmount: 500,
+    });
+    expect(
+      deriveCardDays(
+        [
+          bill("2026-07-15", "2026-07-03"),
+          bill("2026-08-15", "2026-08-05"),
+          bill("2026-09-15", "2026-09-02"),
+          bill("2026-10-15", "2026-10-02"),
+        ],
+        null,
+        new Date(2026, 10, 14),
+      ),
+    ).toEqual({ dueDay: 15, closingDay: 5 });
+  });
+
+  it("only looks at the last six real bills", () => {
+    const bill = (month: string, closing: string): PluggyBill => ({
+      id: month,
+      dueDate: `${month}-15T00:00:00`,
+      billClosingDate: `${month}-${closing}T00:00:00`,
+      totalAmount: 500,
+    });
+    expect(
+      deriveCardDays(
+        [
+          bill("2026-01", "28"),
+          bill("2026-04", "02"),
+          bill("2026-05", "02"),
+          bill("2026-06", "02"),
+          bill("2026-07", "03"),
+          bill("2026-08", "02"),
+          bill("2026-09", "02"),
+        ],
+        null,
+        new Date(2026, 9, 14),
+      ),
+    ).toEqual({ dueDay: 15, closingDay: 3 });
+  });
+
+  it("keeps a zero bill that has payments", () => {
+    expect(
+      deriveCardDays(
+        [
+          {
+            id: "a",
+            dueDate: "2026-11-15T00:00:00",
+            billClosingDate: "2026-11-05T00:00:00",
+            totalAmount: 0,
+            payments: [{ amount: 0 }],
+          },
+        ],
+        null,
+        new Date(2026, 10, 14),
+      ),
+    ).toEqual({ dueDay: 15, closingDay: 5 });
+  });
+
+  it("falls back to the account due date when no bill is real", () => {
+    expect(
+      deriveCardDays(
+        [{ id: "z", dueDate: "2026-11-17T00:00:00", totalAmount: 0 }],
+        "2026-11-15",
+        new Date(2026, 10, 14),
+      ),
+    ).toEqual({ dueDay: 15, closingDay: null });
   });
 
   it("returns null without bills", () => {
