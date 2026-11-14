@@ -3,6 +3,7 @@ import { and, eq, gte, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   balances,
+  cardBillPayments,
   cardBills,
   cards,
   cardTransactions,
@@ -28,6 +29,7 @@ export async function getMonthData(userId: string, monthRef: string) {
     cardTransactionsRes,
     syncStatusRes,
     balancesRes,
+    cardBillPaymentsRes,
   ] = await Promise.all([
     db
       .select()
@@ -63,6 +65,12 @@ export async function getMonthData(userId: string, monthRef: string) {
       ),
     db.select().from(syncStatus).where(eq(syncStatus.id, "pluggy")),
     db.select().from(balances).where(eq(balances.userId, userId)),
+    // The table is created by a manual db:push; until then the month still loads
+    db
+      .select()
+      .from(cardBillPayments)
+      .where(eq(cardBillPayments.userId, userId))
+      .catch(() => []),
   ]);
 
   return {
@@ -73,6 +81,7 @@ export async function getMonthData(userId: string, monthRef: string) {
     cardTransactions: cardTransactionsRes,
     syncStatus: syncStatusRes.at(0) ?? null,
     balances: balancesRes,
+    cardBillPayments: cardBillPaymentsRes,
   };
 }
 

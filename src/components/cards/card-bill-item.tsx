@@ -11,6 +11,7 @@ import {
 import type { CategoryGroup } from "@/lib/cards/category-groups";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { CardBillPayment } from "./card-bill-payment";
 import { CardPurchaseList } from "./card-purchase-list";
 import { CategoryChart } from "./category-chart";
 
@@ -95,6 +96,7 @@ export function CardBillItem({ bill }: CardBillItemProps) {
 
       {expanded && !isEmpty && (
         <div className="border-t border-zinc-700 p-4 space-y-6">
+          {bill.status !== "forecast" && <CardBillPayment bill={bill} />}
           <CategoryChart
             categories={bill.categories}
             color={bill.card.color}

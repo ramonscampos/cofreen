@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   deriveCardDays,
-  detectOpenBillSource,
   evaluateItem,
   isBillPayment,
   mapBill,
@@ -271,6 +270,45 @@ describe("mapTransaction with a wrong billForecastDate", () => {
   });
 });
 
+describe("mapTransaction with foreign currency", () => {
+  const ctx = { billsById: new Map(), closingDay: 16, dueDay: 23 };
+
+  it("uses the amount in BRL, not the foreign amount", () => {
+    const mapped = mapTransaction(
+      tx({
+        amount: 20,
+        currencyCode: "USD",
+        amountInAccountCurrency: 105.72,
+        date: "2026-10-18T00:00:00.000Z",
+      }),
+      ctx,
+    );
+    expect(mapped?.amount).toBe("105.72");
+  });
+
+  it("keeps the amount for BRL purchases", () => {
+    const mapped = mapTransaction(
+      tx({ amount: 19.9, currencyCode: "BRL", amountInAccountCurrency: null }),
+      ctx,
+    );
+    expect(mapped?.amount).toBe("19.9");
+  });
+
+  it("converts a foreign refund too", () => {
+    const mapped = mapTransaction(
+      tx({
+        type: "CREDIT",
+        description: "Estorno compra",
+        amount: -20,
+        currencyCode: "USD",
+        amountInAccountCurrency: -105.72,
+      }),
+      ctx,
+    );
+    expect(mapped?.amount).toBe("-105.72");
+  });
+});
+
 describe("mapBill", () => {
   it("reads payments", () => {
     expect(
@@ -522,20 +560,5 @@ describe("planStalePrune", () => {
 
   it("keeps the fetched ids", () => {
     expect(planStalePrune(["a", "b"])).toEqual(["a", "b"]);
-  });
-});
-
-describe("detectOpenBillSource", () => {
-  it("uses the card balance for Nubank", () => {
-    expect(
-      detectOpenBillSource(["Nu Pagamentos S.A. - Instituição de Pagamento"]),
-    ).toBe("balance");
-  });
-
-  it("sums purchases for other banks", () => {
-    expect(detectOpenBillSource(["Banco Bradesco", "Banco Bradesco"])).toBe(
-      "transactions",
-    );
-    expect(detectOpenBillSource([])).toBe("transactions");
   });
 });

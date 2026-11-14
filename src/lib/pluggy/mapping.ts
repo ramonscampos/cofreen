@@ -1,6 +1,5 @@
 import { addMonths, format, parse } from "date-fns";
 import { billMonthForDate } from "@/lib/cards/bill-cycle";
-import { detectBank } from "./balances";
 import type { PluggyBill, PluggyItem, PluggyTransaction } from "./types";
 
 const toDate = (value: string) => value.slice(0, 10);
@@ -107,8 +106,8 @@ export function mapTransaction(
   const meta = tx.creditCardMetadata ?? {};
   const billId = meta.billId ?? null;
   const bill = billId ? ctx.billsById.get(billId) : undefined;
-  const signed =
-    tx.type === "CREDIT" ? -Math.abs(tx.amount) : Math.abs(tx.amount);
+  const value = Math.abs(tx.amountInAccountCurrency ?? tx.amount);
+  const signed = tx.type === "CREDIT" ? -value : value;
 
   return {
     externalId: tx.id,
@@ -188,16 +187,6 @@ export function evaluateItem(
 // prune, since an empty fetch is far likelier a failed read than no purchases
 export function planStalePrune(fetchedIds: string[]): string[] | null {
   return fetchedIds.length > 0 ? fetchedIds : null;
-}
-
-export type OpenBillSource = "balance" | "transactions";
-
-// Nubank reports the open bill (including carried balance and renegotiations)
-// inside the card balance; Bradesco's balance also holds unlisted installments
-export function detectOpenBillSource(
-  bankAccountNames: string[],
-): OpenBillSource {
-  return detectBank(bankAccountNames) === "Nubank" ? "balance" : "transactions";
 }
 
 export interface ItemSyncResult {

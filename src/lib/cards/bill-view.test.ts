@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Card, CardBill, CardTransaction } from "@/types";
+import type { Card, CardBill, CardBillPayment, CardTransaction } from "@/types";
 import { buildCardBillView } from "./bill-view";
 
 const card: Card = {
@@ -149,7 +149,7 @@ describe("real bills", () => {
   });
 });
 
-describe("open bill from card balance", () => {
+describe("card with a stored balance (Nubank)", () => {
   const nubank: Card = {
     ...card,
     balance: "5556.81",
@@ -189,7 +189,7 @@ describe("open bill from card balance", () => {
     }),
   ];
 
-  it("is the balance minus installments listed for later bills", () => {
+  it("sums the month's purchases and ignores the card balance", () => {
     const view = buildCardBillView({
       card: nubank,
       bills: [bill({ monthRef: "2026-10" })],
@@ -198,30 +198,16 @@ describe("open bill from card balance", () => {
       today,
     });
     expect(view.status).toBe("open");
-    expect(view.amount).toBeCloseTo(3596.3);
-  });
-
-  it("adds an adjustment row so the list adds up to the bill", () => {
-    const view = buildCardBillView({
-      card: nubank,
-      bills: [bill({ monthRef: "2026-10" })],
-      transactions,
-      monthRef: "2026-11",
-      today,
-    });
-    const adjustment = view.purchases.find(
-      (p) => p.description === "Saldo anterior e ajustes",
-    );
-    expect(adjustment?.amount).toBeCloseTo(3596.3 - 1302.37);
+    expect(view.amount).toBeCloseTo(1302.37);
+    expect(view.purchases).toHaveLength(3);
     expect(view.purchases.reduce((sum, p) => sum + p.amount, 0)).toBeCloseTo(
       view.amount,
     );
-    expect(view.categories.some((c) => c.category === "Ajustes")).toBe(false);
   });
 
-  it("falls back to summing purchases without a balance", () => {
+  it("does the same with a zeroed balance after the bill is paid", () => {
     const view = buildCardBillView({
-      card: { ...nubank, balance: null },
+      card: { ...nubank, balance: "0" },
       bills: [bill({ monthRef: "2026-10" })],
       transactions,
       monthRef: "2026-11",
@@ -615,15 +601,6 @@ describe("open bill by closing day", () => {
     expect(view.status).toBe("open");
   });
 
-  it("keeps the latest bill + 1 for cards whose open bill is the balance", () => {
-    const view = buildCardBillView({
-      ...input,
-      card: { ...bradesco, openBillSource: "balance", balance: "1120.80" },
-      monthRef: "2026-11",
-    });
-    expect(view.status).toBe("open");
-  });
-
   it("falls back to the latest bill without a closing day", () => {
     const view = buildCardBillView({
       ...input,
@@ -715,5 +692,141 @@ describe("placeholder bills with zero total", () => {
       today: nov14,
     });
     expect(view.status).toBe("paid");
+  });
+});
+
+describe("payments", () => {
+  const nov14 = new Date(2026, 10, 14);
+  const realBill = (overrides: Partial<CardBill>) =>
+    bill({
+      monthRef: "2026-10",
+      dueDate: "2026-10-23",
+      totalAmount: "1000",
+      ...overrides,
+    });
+  const payment = (overrides: Partial<CardBillPayment> = {}) => ({
+    id: "p1",
+    userId: "u",
+    cardId: card.id,
+    monthRef: "2026-10",
+    amount: "1000",
+    paidOn: "2026-11-10",
+    createdAt: "2026-11-10T00:00:00Z",
+    ...overrides,
+  });
+  const view = (overrides: Partial<Parameters<typeof buildCardBillView>[0]>) =>
+    buildCardBillView({
+      card,
+      bills: [],
+      transactions: [],
+      monthRef: "2026-10",
+      today: nov14,
+      ...overrides,
+    });
+
+  it("keeps the bill amount when Pluggy reports the payment", () => {
+    const result = view({
+      bills: [
+        realBill({
+          totalAmount: "1000",
+          paidAmount: "1000",
+          hasPaymentInfo: true,
+        }),
+      ],
+    });
+    expect(result.status).toBe("paid");
+    expect(result.amount).toBe(1000);
+    expect(result.paidAmount).toBe(1000);
+  });
+
+  it("keeps the amount on a partial payment", () => {
+    const result = view({
+      bills: [realBill({ paidAmount: "400", hasPaymentInfo: true })],
+    });
+    expect(result.status).toBe("partial");
+    expect(result.amount).toBe(1000);
+  });
+
+  it("marks a bill paid from a manual payment of the full amount", () => {
+    const result = view({
+      bills: [realBill({ dueDate: "2026-11-23", monthRef: "2026-11" })],
+      monthRef: "2026-11",
+      payments: [payment({ monthRef: "2026-11" })],
+    });
+    expect(result.status).toBe("paid");
+    expect(result.amount).toBe(1000);
+    expect(result.manualPayment).toEqual({
+      amount: 1000,
+      paidOn: "2026-11-10",
+    });
+  });
+
+  it("marks a bill partial from a smaller manual payment", () => {
+    const result = view({
+      bills: [realBill({ dueDate: "2026-11-23", monthRef: "2026-11" })],
+      monthRef: "2026-11",
+      payments: [payment({ monthRef: "2026-11", amount: "300" })],
+    });
+    expect(result.status).toBe("partial");
+    expect(result.paidAmount).toBe(300);
+    expect(result.amount).toBe(1000);
+  });
+
+  it("adds a manual payment to what Pluggy already reports", () => {
+    const result = view({
+      bills: [
+        realBill({
+          dueDate: "2026-11-23",
+          monthRef: "2026-11",
+          paidAmount: "600",
+          hasPaymentInfo: true,
+        }),
+      ],
+      monthRef: "2026-11",
+      payments: [payment({ monthRef: "2026-11", amount: "400" })],
+    });
+    expect(result.status).toBe("paid");
+    expect(result.paidAmount).toBe(1000);
+  });
+
+  it("applies a manual payment to a month without a Pluggy bill", () => {
+    const result = view({
+      transactions: [tx({ monthRef: "2026-11", amount: "500" })],
+      monthRef: "2026-11",
+      payments: [payment({ monthRef: "2026-11", amount: "500" })],
+    });
+    expect(result.status).toBe("paid");
+    expect(result.amount).toBe(500);
+  });
+
+  it("ignores payments of other cards", () => {
+    const result = view({
+      bills: [realBill({ dueDate: "2026-11-23", monthRef: "2026-11" })],
+      monthRef: "2026-11",
+      payments: [payment({ monthRef: "2026-11", cardId: "other" })],
+    });
+    expect(result.manualPayment).toBeNull();
+    expect(result.status).not.toBe("paid");
+  });
+
+  it("treats a payment beyond the latest bill as paying the next month", () => {
+    // Pluggy attached 3509 to a 2776.61 bill: the rest paid November early
+    const result = view({
+      bills: [
+        realBill({
+          totalAmount: "2776.61",
+          paidAmount: "4079",
+          hasPaymentInfo: true,
+        }),
+      ],
+      transactions: [
+        tx({ monthRef: "2026-11", amount: "1500" }),
+        tx({ monthRef: "2026-11", amount: "-197.61" }),
+      ],
+      monthRef: "2026-11",
+      today: nov14,
+    });
+    expect(result.amount).toBeCloseTo(1302.39);
+    expect(result.status).toBe("paid");
   });
 });

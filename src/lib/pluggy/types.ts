@@ -29,6 +29,9 @@ export interface PluggyTransaction {
   id: string;
   description: string;
   amount: number;
+  // Foreign purchases come with `amount` in the foreign currency; this is the BRL value
+  currencyCode?: string | null;
+  amountInAccountCurrency?: number | null;
   date: string;
   type: "DEBIT" | "CREDIT";
   category?: string | null;

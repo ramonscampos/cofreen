@@ -14,12 +14,10 @@ import { institutionLabel, mapBankAccounts, mapInvestments } from "./balances";
 import { createPluggyClient, type PluggyClient } from "./client";
 import {
   deriveCardDays,
-  detectOpenBillSource,
   evaluateItem,
   type ItemSyncResult,
   mapBill,
   mapTransaction,
-  type OpenBillSource,
   planStalePrune,
   summarizeSync,
 } from "./mapping";
@@ -101,7 +99,6 @@ async function syncAccount(
   account: PluggyAccount,
   from: string,
   categoryNames: Map<string, string>,
-  openBillSource: OpenBillSource,
 ) {
   const bills = await client.listBills(account.id);
   const days = deriveCardDays(bills, account.creditData?.balanceDueDate);
@@ -117,14 +114,14 @@ async function syncAccount(
       pluggyAccountId: account.id,
       pluggyItemId: itemId,
       balance: String(account.balance),
-      openBillSource,
     })
     .onConflictDoUpdate({
       target: cards.pluggyAccountId,
       set: {
         pluggyItemId: itemId,
         balance: String(account.balance),
-        openBillSource,
+        // Rows synced when Nubank used the card balance go back to purchases
+        openBillSource: "transactions",
         ...(days ? { dueDay: days.dueDay, closingDay: days.closingDay } : {}),
       },
     })
@@ -250,7 +247,6 @@ export async function syncPluggyCards(): Promise<{
         const bankNames = accounts
           .filter((a) => a.type === "BANK")
           .map((a) => a.name);
-        const openBillSource = detectOpenBillSource(bankNames);
         for (const account of accounts.filter((a) => a.type === "CREDIT")) {
           await syncAccount(
             client,
@@ -259,7 +255,6 @@ export async function syncPluggyCards(): Promise<{
             account,
             from,
             categoryNames,
-            openBillSource,
           );
         }
         // Balances are secondary: a failure here must not hide synced cards
