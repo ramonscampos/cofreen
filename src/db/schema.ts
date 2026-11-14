@@ -7,6 +7,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 import type { AdapterAccountType } from "next-auth/adapters";
@@ -189,6 +190,27 @@ export const cardBills = pgTable("card_bills", {
     .notNull()
     .defaultNow(),
 });
+
+// Payment the user registered by hand, at most one per card bill
+export const cardBillPayments = pgTable(
+  "card_bill_payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cardId: uuid("card_id")
+      .notNull()
+      .references(() => cards.id, { onDelete: "cascade" }),
+    monthRef: text("month_ref").notNull(), // Format YYYY-MM (due month)
+    amount: numeric("amount").notNull(),
+    paidOn: text("paid_on").notNull(), // Format YYYY-MM-DD
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "string" })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [unique().on(table.cardId, table.monthRef)],
+);
 
 // Bank account balances and active investments, as of the last sync
 export const balances = pgTable("balances", {

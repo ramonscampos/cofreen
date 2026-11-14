@@ -7,7 +7,7 @@ import {
   parse,
   startOfDay,
 } from "date-fns";
-import type { Card, CardBill, CardTransaction } from "@/types";
+import type { Card, CardBill, CardBillPayment, CardTransaction } from "@/types";
 import { billMonthForDate } from "./bill-cycle";
 
 export type CardBillStatus =
@@ -48,6 +48,9 @@ export interface CardBillView {
   status: CardBillStatus;
   amount: number;
   dueDate: string | null;
+  // Paid so far (Pluggy plus the manual payment); never reduces `amount`
+  paidAmount: number;
+  manualPayment: { amount: number; paidOn: string } | null;
   purchases: CardPurchaseView[];
   categories: { category: string; amount: number }[];
 }
@@ -56,6 +59,7 @@ interface BuildCardBillViewInput {
   card: Card;
   bills: CardBill[];
   transactions: CardTransaction[];
+  payments?: CardBillPayment[];
   monthRef: string;
   today: Date;
 }
@@ -70,8 +74,6 @@ const SUBSCRIPTION_NAME =
 const FALLBACK_CATEGORY = "Outros";
 // "Loja 3/12" or "Loja - Parcela 3/12", as banks name installment charges
 const INSTALLMENT_SUFFIX = /\s*(-\s*)?(parcela\s*)?\d{1,2}\/\d{1,2}\s*$/i;
-const ADJUSTMENT_DESCRIPTION = "Saldo anterior e ajustes";
-const ADJUSTMENT_CATEGORY = "Ajustes";
 
 const parseMonth = (monthRef: string) => parse(monthRef, "yyyy-MM", new Date());
 
@@ -126,13 +128,22 @@ function summarizeCategories(purchases: CardPurchaseView[]) {
 const isRealBill = (bill: CardBill) =>
   Number(bill.totalAmount) !== 0 || bill.hasPaymentInfo;
 
-function billStatus(bill: CardBill, today: Date): CardBillStatus {
+function paymentStatus(total: number, paid: number): CardBillStatus | null {
+  if (paid >= total - MONEY_TOLERANCE) return "paid";
+  if (paid > 0) return "partial";
+  return null;
+}
+
+function billStatus(
+  bill: CardBill,
+  today: Date,
+  manualPaid: number,
+): CardBillStatus {
   const total = Number(bill.totalAmount);
-  const paid = Number(bill.paidAmount);
-  if (bill.hasPaymentInfo) {
-    if (paid >= total - MONEY_TOLERANCE) return "paid";
-    if (paid > 0) return "partial";
-    return "closed";
+  if (bill.hasPaymentInfo || manualPaid > 0) {
+    return (
+      paymentStatus(total, Number(bill.paidAmount) + manualPaid) ?? "closed"
+    );
   }
   const due = parse(bill.dueDate, "yyyy-MM-dd", new Date());
   return isBefore(due, startOfDay(today)) ? "paid_inferred" : "closed";
@@ -274,10 +285,20 @@ function projectNamedSubscriptions(
     });
 }
 
+// Pluggy attaches a payment to the latest bill it knows, so a payment beyond
+// that bill's total is the early payment of the bill after it
+function advancePayment(bills: CardBill[], monthRef: string): number {
+  const previous = format(addMonths(parseMonth(monthRef), -1), "yyyy-MM");
+  const bill = bills.find((b) => b.monthRef === previous);
+  if (!bill) return 0;
+  return Math.max(0, Number(bill.paidAmount) - Number(bill.totalAmount));
+}
+
 export function buildCardBillView({
   card,
   bills,
   transactions,
+  payments = [],
   monthRef,
   today,
 }: BuildCardBillViewInput): CardBillView {
@@ -285,12 +306,21 @@ export function buildCardBillView({
     (bill) => bill.cardId === card.id && isRealBill(bill),
   );
   const cardTransactions = transactions.filter((tx) => tx.cardId === card.id);
+  const manual = payments.find(
+    (p) => p.cardId === card.id && p.monthRef === monthRef,
+  );
+  const manualPayment = manual
+    ? { amount: Number(manual.amount), paidOn: manual.paidOn }
+    : null;
+  const manualPaid = manualPayment?.amount ?? 0;
   const empty: CardBillView = {
     card,
     monthRef,
     status: "empty",
     amount: 0,
     dueDate: null,
+    paidAmount: 0,
+    manualPayment,
     purchases: [],
     categories: [],
   };
@@ -308,17 +338,17 @@ export function buildCardBillView({
   if (bill) {
     return {
       ...empty,
-      status: billStatus(bill, today),
+      status: billStatus(bill, today, manualPaid),
       amount: Number(bill.totalAmount),
       dueDate: bill.dueDate,
+      paidAmount: Number(bill.paidAmount) + manualPaid,
       purchases: monthPurchases,
       categories: summarizeCategories(monthPurchases),
     };
   }
 
   // The open bill is the one that closes next, by the card's closing day.
-  // Cards whose open bill comes from the balance (Nubank) and cards without a
-  // closing day use the month after the latest bill. Later months are
+  // Without it, it is the month after the latest bill. Later months are
   // forecasts, even when Pluggy already lists future installments there.
   const latestBillMonth = cardBills
     .map((b) => b.monthRef)
@@ -329,7 +359,7 @@ export function buildCardBillView({
     .sort()
     .at(-1);
   const openMonth =
-    card.closingDay !== null && card.openBillSource === "transactions"
+    card.closingDay !== null
       ? billMonthForDate(today, card.closingDay, card.dueDay)
       : latestBillMonth
         ? format(addMonths(parseMonth(latestBillMonth), 1), "yyyy-MM")
@@ -340,56 +370,33 @@ export function buildCardBillView({
 
   if (!isForecastMonth) {
     if (monthPurchases.length === 0 && monthRef !== openMonth) return empty;
-    const purchasesTotal = sum(monthPurchases);
+    const amount = sum(monthPurchases);
+    const dueDate = dueDateFor(monthRef, card.dueDay);
+    const paidAmount = manualPaid + advancePayment(cardBills, monthRef);
 
     // Closed by the calendar, but Pluggy has not delivered its bill yet
-    if (openMonth && monthRef < openMonth) {
-      const dueDate = dueDateFor(monthRef, card.dueDay);
-      const pastDue = isBefore(
-        parse(dueDate, "yyyy-MM-dd", new Date()),
-        startOfDay(today),
-      );
-      return {
-        ...empty,
-        status: pastDue ? "paid_inferred" : "closed",
-        amount: purchasesTotal,
-        dueDate,
-        purchases: monthPurchases,
-        categories: summarizeCategories(monthPurchases),
-      };
-    }
+    const isClosed = !!openMonth && monthRef < openMonth;
+    const pastDue = isBefore(
+      parse(dueDate, "yyyy-MM-dd", new Date()),
+      startOfDay(today),
+    );
+    const baseStatus: CardBillStatus = !isClosed
+      ? "open"
+      : pastDue
+        ? "paid_inferred"
+        : "closed";
+    const status =
+      amount > MONEY_TOLERANCE && paidAmount > 0
+        ? (paymentStatus(amount, paidAmount) ?? baseStatus)
+        : baseStatus;
 
-    const useBalance =
-      monthRef === openMonth &&
-      card.openBillSource === "balance" &&
-      card.balance !== null;
-    const amount = useBalance
-      ? Number(card.balance) -
-        cardTransactions
-          .filter((tx) => tx.monthRef > monthRef)
-          .reduce((total, tx) => total + Number(tx.amount), 0)
-      : purchasesTotal;
-    const adjustment = amount - purchasesTotal;
-    const purchases =
-      Math.abs(adjustment) > MONEY_TOLERANCE
-        ? [
-            ...monthPurchases,
-            {
-              id: `${card.id}-adjustment-${monthRef}`,
-              description: ADJUSTMENT_DESCRIPTION,
-              date: null,
-              amount: adjustment,
-              category: ADJUSTMENT_CATEGORY,
-              isForecast: false,
-            },
-          ]
-        : monthPurchases;
     return {
       ...empty,
-      status: "open",
+      status,
       amount,
-      dueDate: dueDateFor(monthRef, card.dueDay),
-      purchases,
+      dueDate,
+      paidAmount,
+      purchases: monthPurchases,
       categories: summarizeCategories(monthPurchases),
     };
   }

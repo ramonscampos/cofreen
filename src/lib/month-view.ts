@@ -29,6 +29,7 @@ export function buildMonthView(
         card,
         bills: data.cardBills,
         transactions: data.cardTransactions,
+        payments: data.cardBillPayments,
         monthRef,
         today,
       }),

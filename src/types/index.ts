@@ -1,6 +1,7 @@
 import type { InferSelectModel } from "drizzle-orm";
 import type {
   balances,
+  cardBillPayments,
   cardBills,
   cards,
   cardTransactions,
@@ -53,6 +54,8 @@ export interface Transaction {
 export type CardTransaction = InferSelectModel<typeof cardTransactions>;
 
 export type CardBill = InferSelectModel<typeof cardBills>;
+
+export type CardBillPayment = InferSelectModel<typeof cardBillPayments>;
 
 export type SyncStatus = InferSelectModel<typeof syncStatus>;
 

@@ -68,6 +68,7 @@ const data: MonthData = {
     },
   ],
   cardTransactions: [],
+  cardBillPayments: [],
   syncStatus: null,
   balances: [],
 };
