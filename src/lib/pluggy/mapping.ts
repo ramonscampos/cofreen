@@ -1,4 +1,5 @@
 import { addMonths, format, parse } from "date-fns";
+import { billMonthForDate } from "@/lib/cards/bill-cycle";
 import { detectBank } from "./balances";
 import type { PluggyBill, PluggyItem, PluggyTransaction } from "./types";
 
@@ -13,21 +14,23 @@ interface BillMonthInput {
   dueDay: number;
 }
 
-// Month (yyyy-MM) of the due date of the bill a purchase belongs to
+// Month (yyyy-MM) of the due date of the bill a purchase belongs to. Pluggy's
+// bill is trusted unless it already closed before the purchase, which the
+// known closing day proves wrong.
 export function resolveBillMonth(input: BillMonthInput): string {
-  if (input.billDueDate) return toMonth(input.billDueDate);
-  if (input.billForecastDate) return toMonth(input.billForecastDate);
+  const pluggyMonth = input.billDueDate
+    ? toMonth(input.billDueDate)
+    : input.billForecastDate
+      ? toMonth(input.billForecastDate)
+      : null;
 
   const purchase = parse(toDate(input.purchaseDate), "yyyy-MM-dd", new Date());
-  if (input.closingDay === null) return format(purchase, "yyyy-MM");
+  if (input.closingDay === null) {
+    return pluggyMonth ?? format(purchase, "yyyy-MM");
+  }
 
-  const closesThisMonth = purchase.getDate() < input.closingDay;
-  const closingMonth = addMonths(purchase, closesThisMonth ? 0 : 1);
-  const dueMonth = addMonths(
-    closingMonth,
-    input.dueDay <= input.closingDay ? 1 : 0,
-  );
-  return format(dueMonth, "yyyy-MM");
+  const computed = billMonthForDate(purchase, input.closingDay, input.dueDay);
+  return pluggyMonth && pluggyMonth >= computed ? pluggyMonth : computed;
 }
 
 const BILL_PAYMENT_DESCRIPTION =
@@ -129,11 +132,22 @@ export function mapTransaction(
   };
 }
 
+// Pluggy lists placeholder bills with a zero total, many of them in the future
+const isRealBill = (bill: PluggyBill) =>
+  bill.totalAmount !== 0 || (bill.payments ?? []).length > 0;
+
+// Days come from the latest real bill due within a month; later ones are
+// placeholders that carry made-up dates
 export function deriveCardDays(
   bills: PluggyBill[],
   fallbackDueDate?: string | null,
+  now: Date = new Date(),
 ): { dueDay: number; closingDay: number | null } | null {
-  if (bills.length === 0) {
+  const horizon = format(addMonths(now, 1), "yyyy-MM-dd");
+  const latest = bills
+    .filter((bill) => isRealBill(bill) && toDate(bill.dueDate) <= horizon)
+    .sort((a, b) => b.dueDate.localeCompare(a.dueDate))[0];
+  if (!latest) {
     return fallbackDueDate
       ? {
           dueDay: Number(toDate(fallbackDueDate).slice(8, 10)),
@@ -141,9 +155,6 @@ export function deriveCardDays(
         }
       : null;
   }
-  const latest = [...bills].sort((a, b) =>
-    b.dueDate.localeCompare(a.dueDate),
-  )[0];
   return {
     dueDay: Number(toDate(latest.dueDate).slice(8, 10)),
     closingDay: latest.billClosingDate
