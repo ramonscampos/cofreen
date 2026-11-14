@@ -317,7 +317,8 @@ export function buildCardBillView({
   }
 
   // The open bill is the one that closes next, by the card's closing day.
-  // Without it, it is the month after the latest bill. Later months are
+  // Cards whose open bill comes from the balance (Nubank) and cards without a
+  // closing day use the month after the latest bill. Later months are
   // forecasts, even when Pluggy already lists future installments there.
   const latestBillMonth = cardBills
     .map((b) => b.monthRef)
@@ -328,7 +329,7 @@ export function buildCardBillView({
     .sort()
     .at(-1);
   const openMonth =
-    card.closingDay !== null
+    card.closingDay !== null && card.openBillSource === "transactions"
       ? billMonthForDate(today, card.closingDay, card.dueDay)
       : latestBillMonth
         ? format(addMonths(parseMonth(latestBillMonth), 1), "yyyy-MM")

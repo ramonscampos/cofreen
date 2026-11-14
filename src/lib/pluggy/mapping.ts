@@ -136,17 +136,23 @@ export function mapTransaction(
 const isRealBill = (bill: PluggyBill) =>
   bill.totalAmount !== 0 || (bill.payments ?? []).length > 0;
 
-// Days come from the latest real bill due within a month; later ones are
-// placeholders that carry made-up dates
+const CLOSING_HISTORY_BILLS = 6;
+
+// The due day comes from the latest real bill due within a month; later ones
+// are placeholders that carry made-up dates. Closing days drift between bills,
+// so the latest one seen among recent bills is used: Pluggy's own bill is then
+// only overridden for purchases made on or after the latest closing.
 export function deriveCardDays(
   bills: PluggyBill[],
   fallbackDueDate?: string | null,
   now: Date = new Date(),
 ): { dueDay: number; closingDay: number | null } | null {
   const horizon = format(addMonths(now, 1), "yyyy-MM-dd");
-  const latest = bills
+  const recent = bills
     .filter((bill) => isRealBill(bill) && toDate(bill.dueDate) <= horizon)
-    .sort((a, b) => b.dueDate.localeCompare(a.dueDate))[0];
+    .sort((a, b) => b.dueDate.localeCompare(a.dueDate))
+    .slice(0, CLOSING_HISTORY_BILLS);
+  const latest = recent[0];
   if (!latest) {
     return fallbackDueDate
       ? {
@@ -155,11 +161,12 @@ export function deriveCardDays(
         }
       : null;
   }
+  const closingDays = recent
+    .filter((bill) => bill.billClosingDate)
+    .map((bill) => Number(toDate(bill.billClosingDate ?? "").slice(8, 10)));
   return {
     dueDay: Number(toDate(latest.dueDate).slice(8, 10)),
-    closingDay: latest.billClosingDate
-      ? Number(toDate(latest.billClosingDate).slice(8, 10))
-      : null,
+    closingDay: closingDays.length > 0 ? Math.max(...closingDays) : null,
   };
 }
 

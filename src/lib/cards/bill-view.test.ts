@@ -615,6 +615,15 @@ describe("open bill by closing day", () => {
     expect(view.status).toBe("open");
   });
 
+  it("keeps the latest bill + 1 for cards whose open bill is the balance", () => {
+    const view = buildCardBillView({
+      ...input,
+      card: { ...bradesco, openBillSource: "balance", balance: "1120.80" },
+      monthRef: "2026-11",
+    });
+    expect(view.status).toBe("open");
+  });
+
   it("falls back to the latest bill without a closing day", () => {
     const view = buildCardBillView({
       ...input,

@@ -96,6 +96,26 @@ describe("resolveBillMonth", () => {
     ).toBe("2027-01");
   });
 
+  it("keeps Pluggy's bill for purchases before the latest closing day", () => {
+    // Bradesco closes between the 2nd and the 5th
+    const bradesco = { closingDay: 5, dueDay: 15 };
+    for (const day of ["02", "03"]) {
+      expect(
+        resolveBillMonth({
+          billForecastDate: "2026-11-15",
+          purchaseDate: `2026-11-${day}`,
+          ...bradesco,
+        }),
+      ).toBe("2026-11");
+    }
+    expect(
+      resolveBillMonth({
+        purchaseDate: "2026-11-04",
+        ...bradesco,
+      }),
+    ).toBe("2026-11");
+  });
+
   it("falls back to purchase month without closing day", () => {
     expect(
       resolveBillMonth({
@@ -332,6 +352,51 @@ describe("deriveCardDays", () => {
         now,
       ),
     ).toEqual({ dueDay: 16, closingDay: 5 });
+  });
+
+  it("uses the latest closing day among the recent real bills", () => {
+    const bill = (due: string, closing: string): PluggyBill => ({
+      id: due,
+      dueDate: `${due}T00:00:00`,
+      billClosingDate: `${closing}T00:00:00`,
+      totalAmount: 500,
+    });
+    expect(
+      deriveCardDays(
+        [
+          bill("2026-07-15", "2026-07-03"),
+          bill("2026-08-15", "2026-08-05"),
+          bill("2026-09-15", "2026-09-02"),
+          bill("2026-10-15", "2026-10-02"),
+        ],
+        null,
+        new Date(2026, 10, 14),
+      ),
+    ).toEqual({ dueDay: 15, closingDay: 5 });
+  });
+
+  it("only looks at the last six real bills", () => {
+    const bill = (month: string, closing: string): PluggyBill => ({
+      id: month,
+      dueDate: `${month}-15T00:00:00`,
+      billClosingDate: `${month}-${closing}T00:00:00`,
+      totalAmount: 500,
+    });
+    expect(
+      deriveCardDays(
+        [
+          bill("2026-01", "28"),
+          bill("2026-04", "02"),
+          bill("2026-05", "02"),
+          bill("2026-06", "02"),
+          bill("2026-07", "03"),
+          bill("2026-08", "02"),
+          bill("2026-09", "02"),
+        ],
+        null,
+        new Date(2026, 9, 14),
+      ),
+    ).toEqual({ dueDay: 15, closingDay: 3 });
   });
 
   it("keeps a zero bill that has payments", () => {
