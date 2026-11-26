@@ -13,6 +13,7 @@ import {
 import { institutionLabel, mapBankAccounts, mapInvestments } from "./balances";
 import { createPluggyClient, type PluggyClient } from "./client";
 import {
+  allocateBillPayments,
   deriveCardDays,
   evaluateItem,
   type ItemSyncResult,
@@ -128,10 +129,15 @@ async function syncAccount(
     .returning();
 
   if (bills.length > 0) {
+    const paidByBill = allocateBillPayments(bills);
     await db
       .insert(cardBills)
       .values(
-        bills.map((bill) => ({ ...mapBill(bill), userId, cardId: card.id })),
+        bills.map((bill) => ({
+          ...mapBill(bill, paidByBill.get(bill.id) ?? 0),
+          userId,
+          cardId: card.id,
+        })),
       )
       .onConflictDoUpdate({
         target: cardBills.externalId,

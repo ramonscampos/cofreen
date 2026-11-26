@@ -217,6 +217,30 @@ describe("card with a stored balance (Nubank)", () => {
   });
 });
 
+describe("open bill after a month with rounding noise (Nubank PF)", () => {
+  it("is open, not partially paid, with nothing paid", () => {
+    const view = buildCardBillView({
+      card,
+      bills: [
+        bill({
+          monthRef: "2026-10",
+          totalAmount: "930.8752",
+          paidAmount: "1629.39",
+          hasPaymentInfo: true,
+        }),
+        // November was prepaid; its total is rounding noise
+        bill({ monthRef: "2026-11", totalAmount: "-0.0046" }),
+      ],
+      transactions: [tx({ monthRef: "2026-12", amount: "462.38" })],
+      monthRef: "2026-12",
+      today: new Date(2026, 10, 26),
+    });
+    expect(view.status).toBe("open");
+    expect(view.paidAmount).toBe(0);
+    expect(view.amount).toBeCloseTo(462.38, 2);
+  });
+});
+
 describe("forecast", () => {
   const history = [
     bill({ monthRef: "2026-08" }),

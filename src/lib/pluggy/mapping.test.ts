@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  allocateBillPayments,
   deriveCardDays,
   evaluateItem,
   isBillPayment,
@@ -509,6 +510,87 @@ describe("deriveCardDays", () => {
       dueDay: 23,
       closingDay: null,
     });
+  });
+});
+
+describe("allocateBillPayments", () => {
+  const payment = (id: string, amount: number, date: string) => ({
+    id,
+    amount,
+    paymentDate: `${date}T00:00:00.000Z`,
+  });
+  const bill = (
+    id: string,
+    closing: string,
+    totalAmount: number,
+    payments: PluggyBill["payments"],
+  ): PluggyBill => ({
+    id,
+    dueDate: `${closing.slice(0, 8)}15T00:00:00`,
+    billClosingDate: `${closing}T00:00:00`,
+    totalAmount,
+    payments,
+  });
+
+  // Bradesco lists last bill's payment again on the next bill, under a new id
+  it("gives each payment to the bill closed before it, once", () => {
+    const paid = allocateBillPayments([
+      bill("aug", "2026-08-05", 7180.14, []),
+      bill("sep", "2026-09-02", 4575.26, [
+        payment("p1", 7180.14, "2026-08-17"),
+      ]),
+      bill("oct", "2026-10-02", 6402.18, [
+        payment("p2", 6402.18, "2026-10-15"),
+        payment("p3", 4575.26, "2026-09-15"),
+      ]),
+      bill("nov", "2026-11-04", 7978.42, [
+        payment("p4", 7978.42, "2026-11-13"),
+        payment("p5", 6402.18, "2026-10-15"),
+      ]),
+    ]);
+    expect(paid.get("aug")).toBeCloseTo(7180.14);
+    expect(paid.get("sep")).toBeCloseTo(4575.26);
+    expect(paid.get("oct")).toBeCloseTo(6402.18);
+    expect(paid.get("nov")).toBeCloseTo(7978.42);
+  });
+
+  // Nubank: payments after closing, up to the next one, belong to the bill
+  it("keeps payments made until the next closing on the closed bill", () => {
+    const paid = allocateBillPayments([
+      bill("oct", "2026-10-16", 2776.61, [
+        payment("a", 500, "2026-10-16"),
+        payment("b", 70, "2026-10-24"),
+        payment("c", 3509, "2026-11-13"),
+      ]),
+      bill("nov", "2026-11-16", 119.5, []),
+    ]);
+    expect(paid.get("oct")).toBeCloseTo(4079);
+    expect(paid.get("nov") ?? 0).toBe(0);
+  });
+
+  it("leaves a payment without date on the bill that lists it", () => {
+    const paid = allocateBillPayments([
+      bill("oct", "2026-10-16", 100, [{ amount: 100 }]),
+      bill("nov", "2026-11-16", 50, []),
+    ]);
+    expect(paid.get("oct")).toBe(100);
+  });
+});
+
+describe("mapBill with allocated payments", () => {
+  it("uses the allocated amount instead of the listed payments", () => {
+    expect(
+      mapBill(
+        {
+          id: "nov",
+          dueDate: "2026-11-15T00:00:00",
+          billClosingDate: "2026-11-04T00:00:00",
+          totalAmount: 7978.42,
+          payments: [{ amount: 7978.42 }, { amount: 6402.18 }],
+        },
+        7978.42,
+      ),
+    ).toMatchObject({ paidAmount: "7978.42", hasPaymentInfo: true });
   });
 });
 
