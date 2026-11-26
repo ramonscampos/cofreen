@@ -138,9 +138,10 @@ const isRealBill = (bill: PluggyBill) =>
 const CLOSING_HISTORY_BILLS = 6;
 
 // The due day comes from the latest real bill due within a month; later ones
-// are placeholders that carry made-up dates. Closing days drift between bills,
-// so the latest one seen among recent bills is used: Pluggy's own bill is then
-// only overridden for purchases made on or after the latest closing.
+// are placeholders that carry made-up dates. A card with no real bill yet
+// (Itaú) uses its placeholders due within a month. Closing days drift between
+// bills, so the latest one seen among recent bills is used: Pluggy's own bill
+// is then only overridden for purchases made on or after the latest closing.
 export function deriveCardDays(
   bills: PluggyBill[],
   fallbackDueDate?: string | null,
@@ -151,7 +152,13 @@ export function deriveCardDays(
     .filter((bill) => isRealBill(bill) && toDate(bill.dueDate) <= horizon)
     .sort((a, b) => b.dueDate.localeCompare(a.dueDate))
     .slice(0, CLOSING_HISTORY_BILLS);
-  const latest = recent[0];
+  // Without real bills, placeholders still carry the bank's closing day
+  const placeholders = bills
+    .filter((bill) => bill.billClosingDate && toDate(bill.dueDate) <= horizon)
+    .sort((a, b) => b.dueDate.localeCompare(a.dueDate))
+    .slice(0, CLOSING_HISTORY_BILLS);
+  const source = recent.length > 0 ? recent : placeholders;
+  const latest = source[0];
   if (!latest) {
     return fallbackDueDate
       ? {
@@ -160,7 +167,7 @@ export function deriveCardDays(
         }
       : null;
   }
-  const closingDays = recent
+  const closingDays = source
     .filter((bill) => bill.billClosingDate)
     .map((bill) => Number(toDate(bill.billClosingDate ?? "").slice(8, 10)));
   return {

@@ -270,6 +270,24 @@ describe("mapTransaction with a wrong billForecastDate", () => {
   });
 });
 
+describe("mapTransaction for a card with only placeholder bills", () => {
+  // Itaú: bill closed on 11-05, yet Pluggy forecasts the bill of November
+  it("moves purchases from the closing day on to the next bill", () => {
+    const mapped = mapTransaction(
+      {
+        id: "t1",
+        description: "Loja",
+        amount: 59.98,
+        date: "2026-11-05T02:23:05.000Z",
+        type: "DEBIT",
+        creditCardMetadata: { billForecastDate: "2026-11" },
+      },
+      { billsById: new Map(), closingDay: 5, dueDay: 16 },
+    );
+    expect(mapped?.monthRef).toBe("2026-12");
+  });
+});
+
 describe("mapTransaction with foreign currency", () => {
   const ctx = { billsById: new Map(), closingDay: 16, dueDay: 23 };
 
@@ -463,6 +481,23 @@ describe("deriveCardDays", () => {
         new Date(2026, 10, 14),
       ),
     ).toEqual({ dueDay: 15, closingDay: null });
+  });
+
+  // Itaú lists only zero placeholders, but their closing and due days are real
+  it("reads the days from placeholder bills when no bill is real", () => {
+    const zero = (due: string): PluggyBill => ({
+      id: due,
+      dueDate: `${due}T00:00:00`,
+      billClosingDate: `${due.slice(0, 8)}05T00:00:00`,
+      totalAmount: 0,
+    });
+    expect(
+      deriveCardDays(
+        [zero("2026-11-16"), zero("2027-01-15"), zero("2030-06-17")],
+        "2026-11-16",
+        new Date(2026, 10, 26),
+      ),
+    ).toEqual({ dueDay: 16, closingDay: 5 });
   });
 
   it("returns null without bills", () => {
