@@ -568,6 +568,33 @@ describe("allocateBillPayments", () => {
     expect(paid.get("nov") ?? 0).toBe(0);
   });
 
+  it("keeps equal payments made the same day on one bill", () => {
+    const paid = allocateBillPayments([
+      bill("oct", "2026-10-16", 1000, [
+        payment("a", 500, "2026-10-20"),
+        payment("b", 500, "2026-10-20"),
+      ]),
+    ]);
+    expect(paid.get("oct")).toBe(1000);
+  });
+
+  it("never gives a payment to a placeholder bill", () => {
+    const paid = allocateBillPayments([
+      bill("oct", "2026-10-16", 900, [payment("a", 900, "2026-11-10")]),
+      bill("placeholder", "2026-11-05", 0, []),
+    ]);
+    expect(paid.get("oct")).toBe(900);
+    expect(paid.get("placeholder")).toBeUndefined();
+  });
+
+  it("counts a payment without date listed on two bills once, by id", () => {
+    const paid = allocateBillPayments([
+      bill("oct", "2026-10-16", 300, [{ id: "p", amount: 300 }]),
+      bill("nov", "2026-11-16", 200, [{ id: "p", amount: 300 }]),
+    ]);
+    expect((paid.get("oct") ?? 0) + (paid.get("nov") ?? 0)).toBe(300);
+  });
+
   it("leaves a payment without date on the bill that lists it", () => {
     const paid = allocateBillPayments([
       bill("oct", "2026-10-16", 100, [{ amount: 100 }]),

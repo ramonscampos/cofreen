@@ -62,27 +62,41 @@ export interface MappedBill {
   hasPaymentInfo: boolean;
 }
 
-// Each payment goes to the latest bill closed on or before its date. Pluggy
-// lists one payment under the bill it paid and, at Bradesco, again under the
-// next bill with a new id, so repeats (same date and amount) count once.
+// Pluggy lists placeholder bills with a zero total, many of them in the future
+const isRealBill = (bill: PluggyBill) =>
+  bill.totalAmount !== 0 || (bill.payments ?? []).length > 0;
+
+// Each payment goes to the latest real bill closed on or before its date.
+// Pluggy lists one payment under the bill it paid and, at Bradesco, again
+// under the next bill with a new id. A payment already listed under another
+// bill (same id, or same date and amount) counts once; equal payments listed
+// on one bill are kept.
 export function allocateBillPayments(bills: PluggyBill[]): Map<string, number> {
   const closed = bills
-    .filter((bill) => bill.billClosingDate)
+    .filter((bill) => bill.billClosingDate && isRealBill(bill))
     .map((bill) => ({
       id: bill.id,
       closing: toDate(bill.billClosingDate ?? ""),
     }))
     .sort((a, b) => b.closing.localeCompare(a.closing));
   const paid = new Map<string, number>();
-  const seen = new Set<string>();
+  // Payment key -> bill that listed it first
+  const listedOn = new Map<string, string>();
 
   for (const bill of bills) {
     for (const payment of bill.payments ?? []) {
       const date = payment.paymentDate ? toDate(payment.paymentDate) : null;
-      if (date) {
-        const key = `${date}|${payment.amount.toFixed(2)}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
+      const keys = [
+        payment.id ? `id:${payment.id}` : null,
+        date ? `${date}|${payment.amount.toFixed(2)}` : null,
+      ].filter((key): key is string => key !== null);
+      const repeat = keys.some((key) => {
+        const owner = listedOn.get(key);
+        return owner !== undefined && owner !== bill.id;
+      });
+      if (repeat) continue;
+      for (const key of keys) {
+        if (!listedOn.has(key)) listedOn.set(key, bill.id);
       }
       const target =
         (date && closed.find((c) => c.closing <= date)?.id) || bill.id;
@@ -163,10 +177,6 @@ export function mapTransaction(
       null,
   };
 }
-
-// Pluggy lists placeholder bills with a zero total, many of them in the future
-const isRealBill = (bill: PluggyBill) =>
-  bill.totalAmount !== 0 || (bill.payments ?? []).length > 0;
 
 const CLOSING_HISTORY_BILLS = 6;
 

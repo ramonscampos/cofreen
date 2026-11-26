@@ -385,10 +385,7 @@ function unlistedCharges(
 ): CardPurchaseView {
   return {
     id: `${card.id}-${monthRef}-unlisted`,
-    description:
-      amount > 0
-        ? "Lançamentos ainda sem detalhe no banco"
-        : "Ajuste pelo saldo do cartão",
+    description: "Lançamentos ainda sem detalhe no banco",
     date: null,
     amount,
     category: FALLBACK_CATEGORY,
@@ -497,9 +494,10 @@ export function buildCardBillView({
         openMonth,
         today: todayDate,
       });
-      if (fromBalance !== null) {
+      // A balance below the listed purchases is stale: keep the purchases
+      if (fromBalance !== null && fromBalance >= amount - MONEY_TOLERANCE) {
         const rest = roundCents(fromBalance - amount);
-        if (Math.abs(rest) > MONEY_TOLERANCE) {
+        if (rest > MONEY_TOLERANCE) {
           purchases = [...purchases, unlistedCharges(card, monthRef, rest)];
         }
         amount = fromBalance;

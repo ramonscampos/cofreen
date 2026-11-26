@@ -444,6 +444,25 @@ describe("open bill on 2026-11-26 (December bill)", () => {
     expect(view.amount).toBe(300);
   });
 
+  it("sums the purchases when a stale balance would cancel them", () => {
+    const view = buildCardBillView({
+      card: { ...card, balance: "0" },
+      bills: [
+        bill({
+          monthRef: "2026-11",
+          totalAmount: "500",
+          paidAmount: "500",
+          hasPaymentInfo: true,
+        }),
+      ],
+      transactions: [tx({ monthRef: "2026-12", amount: "300" })],
+      monthRef: "2026-12",
+      today: nov26,
+    });
+    expect(view.amount).toBe(300);
+    expect(view.purchases).toHaveLength(1);
+  });
+
   it("sums the purchases when the balance does not add up", () => {
     const view = buildCardBillView({
       card: { ...card, balance: "0" },
