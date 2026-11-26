@@ -149,95 +149,310 @@ describe("real bills", () => {
   });
 });
 
-describe("card with a stored balance (Nubank)", () => {
-  const nubank: Card = {
-    ...card,
-    balance: "5556.81",
-    openBillSource: "balance",
-  };
-  const transactions = [
-    tx({
-      monthRef: "2026-11",
-      description: "Renegociação 1/2",
-      amount: "1950.81",
-      installmentCurrent: 1,
-      installmentTotal: 2,
-    }),
-    tx({
-      monthRef: "2026-11",
-      description: "Crédito de parcelamento",
-      amount: "-3418.96",
-    }),
-    tx({
-      monthRef: "2026-11",
-      description: "Pix no Crédito",
-      amount: "2770.52",
-    }),
-    tx({
-      monthRef: "2026-12",
-      description: "Renegociação 2/2",
-      amount: "1950.81",
-      installmentCurrent: 2,
-      installmentTotal: 2,
-    }),
-    tx({
-      monthRef: "2027-01",
-      description: "Curso 3/12",
-      amount: "9.70",
-      installmentCurrent: 3,
-      installmentTotal: 12,
-    }),
-  ];
-
-  it("sums the month's purchases and ignores the card balance", () => {
-    const view = buildCardBillView({
-      card: nubank,
-      bills: [bill({ monthRef: "2026-10" })],
-      transactions,
-      monthRef: "2026-11",
-      today,
-    });
-    expect(view.status).toBe("open");
-    expect(view.amount).toBeCloseTo(1302.37);
-    expect(view.purchases).toHaveLength(3);
-    expect(view.purchases.reduce((sum, p) => sum + p.amount, 0)).toBeCloseTo(
-      view.amount,
+describe("open bill on 2026-11-26 (December bill)", () => {
+  const nov26 = new Date(2026, 10, 26);
+  const sumOf = (purchases: { amount: number }[]) =>
+    purchases.reduce((sum, p) => sum + p.amount, 0);
+  const series = (
+    description: string,
+    amount: string,
+    purchaseDate: string,
+    total: number,
+    rows: [string, number][],
+  ) =>
+    rows.map(([monthRef, current]) =>
+      tx({
+        monthRef,
+        description,
+        amount,
+        purchaseDate,
+        installmentCurrent: current,
+        installmentTotal: total,
+      }),
     );
+
+  describe("Nubank PF", () => {
+    // Nov's total is rounding noise (-0.0046) after November was prepaid
+    const bills = [
+      bill({
+        monthRef: "2026-10",
+        totalAmount: "930.8752",
+        paidAmount: "1629.39",
+        hasPaymentInfo: true,
+      }),
+      bill({ monthRef: "2026-11", totalAmount: "-0.0046" }),
+    ];
+    const transactions = [
+      tx({ monthRef: "2026-12", amount: "432.48", purchaseDate: "2026-11-18" }),
+      ...series("Assinatura", "29.90", "2026-11-20", 12, [
+        ["2026-12", 1],
+        ["2027-01", 2],
+        ["2027-02", 3],
+        ["2027-03", 4],
+        ["2027-04", 5],
+        ["2027-05", 6],
+        ["2027-06", 7],
+        ["2027-07", 8],
+        ["2027-08", 9],
+        ["2027-09", 10],
+        ["2027-10", 11],
+        ["2027-11", 12],
+      ]),
+    ];
+
+    it("is open, not partially paid, with nothing paid", () => {
+      const view = buildCardBillView({
+        card,
+        bills,
+        transactions,
+        monthRef: "2026-12",
+        today: nov26,
+      });
+      expect(view.status).toBe("open");
+      expect(view.paidAmount).toBe(0);
+      expect(view.amount).toBeCloseTo(462.38, 2);
+    });
+
+    it("matches the card balance less the later installments", () => {
+      const view = buildCardBillView({
+        card: { ...card, balance: "791.28" },
+        bills,
+        transactions,
+        monthRef: "2026-12",
+        today: nov26,
+      });
+      expect(view.amount).toBeCloseTo(462.38, 2);
+      expect(view.purchases).toHaveLength(2);
+    });
   });
 
-  it("does the same with a zeroed balance after the bill is paid", () => {
+  describe("Nubank PJ", () => {
+    const pj: Card = { ...card, balance: "4915.38" };
+    const bills = [
+      bill({
+        monthRef: "2026-10",
+        totalAmount: "2776.6145",
+        paidAmount: "4079",
+        hasPaymentInfo: true,
+      }),
+      // What was left of November after the early payment, still unpaid
+      bill({ monthRef: "2026-11", totalAmount: "119.5019" }),
+    ];
+    const transactions = [
+      ...series("Renegociação de pendências", "1950.81", "2026-10-16", 2, [
+        ["2026-11", 1],
+      ]),
+      tx({
+        monthRef: "2026-12",
+        amount: "1311.37",
+        purchaseDate: "2026-11-20",
+      }),
+      ...series("Curso", "9.70", "2026-10-09", 12, [
+        ["2026-12", 3],
+        ["2027-01", 4],
+        ["2027-02", 5],
+        ["2027-03", 6],
+        ["2027-04", 7],
+        ["2027-05", 8],
+        ["2027-06", 9],
+        ["2027-07", 10],
+        ["2027-08", 11],
+        ["2027-09", 12],
+      ]),
+      ...series("Bolsa", "297.79", "2026-11-16", 3, [
+        ["2026-12", 1],
+        ["2027-01", 2],
+        ["2027-02", 3],
+      ]),
+    ];
+
+    it("takes the bill from the card balance", () => {
+      const view = buildCardBillView({
+        card: pj,
+        bills,
+        transactions,
+        monthRef: "2026-12",
+        today: nov26,
+      });
+      expect(view.status).toBe("open");
+      expect(view.paidAmount).toBe(0);
+      expect(view.amount).toBeCloseTo(4113, 2);
+      expect(sumOf(view.purchases)).toBeCloseTo(view.amount, 2);
+    });
+
+    it("shows the installment Pluggy did not list and the rest apart", () => {
+      const view = buildCardBillView({
+        card: pj,
+        bills,
+        transactions,
+        monthRef: "2026-12",
+        today: nov26,
+      });
+      expect(
+        view.purchases.find((p) => p.installmentTotal === 2),
+      ).toMatchObject({
+        installmentCurrent: 2,
+        amount: 1950.81,
+        isForecast: true,
+      });
+      const rest = view.purchases.find((p) => p.id.endsWith("-unlisted"));
+      expect(rest?.amount).toBeCloseTo(543.33, 2);
+      expect(rest?.description).toBe("Lançamentos ainda sem detalhe no banco");
+    });
+
+    it("leaves November as it was", () => {
+      const view = buildCardBillView({
+        card: pj,
+        bills,
+        transactions,
+        monthRef: "2026-11",
+        today: nov26,
+      });
+      expect(view.amount).toBeCloseTo(119.5, 2);
+      expect(view.status).toBe("paid_inferred");
+    });
+  });
+
+  describe("Bradesco", () => {
+    const bradesco: Card = {
+      ...card,
+      id: "card-brad",
+      dueDay: 15,
+      closingDay: 5,
+      balance: "14966.18",
+    };
+    const ofCard = <T extends { cardId: string }>(rows: T[]) =>
+      rows.map((row) => ({ ...row, cardId: bradesco.id }));
+    const bills = ofCard([
+      bill({
+        monthRef: "2026-10",
+        dueDate: "2026-10-15",
+        totalAmount: "6402.18",
+        paidAmount: "6402.18",
+        hasPaymentInfo: true,
+      }),
+      bill({
+        monthRef: "2026-11",
+        dueDate: "2026-11-15",
+        totalAmount: "7978.42",
+        paidAmount: "7978.42",
+        hasPaymentInfo: true,
+      }),
+    ]);
+    // Bradesco lists no future installments: each one shows up when it posts
+    const transactions = ofCard([
+      ...series("Magazine", "510.79", "2026-09-30", 10, [["2026-10", 1]]),
+      ...series("Enxoval", "446.50", "2026-08-18", 6, [["2026-11", 3]]),
+      ...series("Atacado", "267.07", "2026-10-24", 2, [["2026-11", 1]]),
+      ...series("Suplementos", "170", "2026-10-29", 2, [["2026-11", 1]]),
+      ...series("Amazon", "1655.67", "2026-11-15", 3, [["2026-12", 1]]),
+      ...series("Riachuelo", "131.39", "2026-11-15", 2, [["2026-12", 1]]),
+      tx({
+        monthRef: "2026-12",
+        amount: "3467.74",
+        purchaseDate: "2026-11-14",
+      }),
+    ]);
+    const view = (monthRef: string) =>
+      buildCardBillView({
+        card: bradesco,
+        bills,
+        transactions,
+        monthRef,
+        today: nov26,
+      });
+
+    it("is the card balance less the installments still to post", () => {
+      const dec = view("2026-12");
+      expect(dec.status).toBe("open");
+      expect(dec.paidAmount).toBe(0);
+      expect(dec.amount).toBeCloseTo(6374.13, 2);
+      expect(sumOf(dec.purchases)).toBeCloseTo(dec.amount, 2);
+    });
+
+    it("adds installments due to have posted by today", () => {
+      const forecast = view("2026-12")
+        .purchases.filter((p) => p.isForecast)
+        .map((p) => [p.description, p.installmentCurrent]);
+      expect(forecast).toEqual([
+        ["Enxoval", 4],
+        ["Atacado", 2],
+      ]);
+    });
+
+    it("keeps the closed November bill", () => {
+      const nov = view("2026-11");
+      expect(nov.amount).toBe(7978.42);
+      expect(nov.status).toBe("paid");
+    });
+  });
+
+  describe("Itaú, with no real bill yet", () => {
+    const itau: Card = {
+      ...card,
+      id: "card-itau",
+      dueDay: 16,
+      closingDay: 5,
+      balance: "2980.17",
+    };
+    const transactions = [
+      tx({
+        monthRef: "2026-12",
+        amount: "2393.95",
+        purchaseDate: "2026-11-05",
+      }),
+      tx({ monthRef: "2026-12", amount: "586.22", purchaseDate: "2026-11-09" }),
+    ].map((row) => ({ ...row, cardId: itau.id }));
+    const placeholder = {
+      ...bill({ monthRef: "2026-11", totalAmount: "0" }),
+      cardId: itau.id,
+    };
+
+    it("sums the purchases of the bill that closes next", () => {
+      const dec = buildCardBillView({
+        card: itau,
+        bills: [placeholder],
+        transactions,
+        monthRef: "2026-12",
+        today: nov26,
+      });
+      expect(dec.status).toBe("open");
+      expect(dec.amount).toBeCloseTo(2980.17, 2);
+      expect(dec.dueDate).toBe("2026-12-16");
+    });
+
+    it("has nothing in November", () => {
+      const nov = buildCardBillView({
+        card: itau,
+        bills: [placeholder],
+        transactions,
+        monthRef: "2026-11",
+        today: nov26,
+      });
+      expect(nov.status).toBe("empty");
+    });
+  });
+
+  it("sums the purchases when last month's bill is not in yet", () => {
     const view = buildCardBillView({
-      card: { ...nubank, balance: "0" },
+      card: { ...card, balance: "9000" },
       bills: [bill({ monthRef: "2026-10" })],
-      transactions,
-      monthRef: "2026-11",
-      today,
-    });
-    expect(view.amount).toBeCloseTo(1302.37);
-  });
-});
-
-describe("open bill after a month with rounding noise (Nubank PF)", () => {
-  it("is open, not partially paid, with nothing paid", () => {
-    const view = buildCardBillView({
-      card,
-      bills: [
-        bill({
-          monthRef: "2026-10",
-          totalAmount: "930.8752",
-          paidAmount: "1629.39",
-          hasPaymentInfo: true,
-        }),
-        // November was prepaid; its total is rounding noise
-        bill({ monthRef: "2026-11", totalAmount: "-0.0046" }),
-      ],
-      transactions: [tx({ monthRef: "2026-12", amount: "462.38" })],
+      transactions: [tx({ monthRef: "2026-12", amount: "300" })],
       monthRef: "2026-12",
-      today: new Date(2026, 10, 26),
+      today: nov26,
     });
-    expect(view.status).toBe("open");
-    expect(view.paidAmount).toBe(0);
-    expect(view.amount).toBeCloseTo(462.38, 2);
+    expect(view.amount).toBe(300);
+  });
+
+  it("sums the purchases when the balance does not add up", () => {
+    const view = buildCardBillView({
+      card: { ...card, balance: "0" },
+      bills: [bill({ monthRef: "2026-11", totalAmount: "500" })],
+      transactions: [tx({ monthRef: "2026-12", amount: "300" })],
+      monthRef: "2026-12",
+      today: nov26,
+    });
+    expect(view.amount).toBe(300);
   });
 });
 

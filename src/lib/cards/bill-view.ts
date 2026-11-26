@@ -1,10 +1,10 @@
 import {
   addMonths,
-  differenceInCalendarMonths,
   format,
   getDaysInMonth,
   isBefore,
   parse,
+  parseISO,
   startOfDay,
 } from "date-fns";
 import type { Card, CardBill, CardBillPayment, CardTransaction } from "@/types";
@@ -149,12 +149,19 @@ function billStatus(
   return isBefore(due, startOfDay(today)) ? "paid_inferred" : "closed";
 }
 
-// Each installment series is projected from its most advanced synced row, so
-// a series not yet posted to the open bill still shows up in later months
-function projectInstallments(
+interface PendingInstallment {
+  tx: CardTransaction;
+  current: number;
+  monthRef: string;
+  // Expected posting date: the purchase day, one month per installment
+  postsOn: string | null;
+}
+
+// Installments of each series after its most advanced synced row. Banks that
+// list no future rows (Bradesco) only show each one when it posts.
+function remainingInstallments(
   transactions: CardTransaction[],
-  monthRef: string,
-): CardPurchaseView[] {
+): PendingInstallment[] {
   const latestBySeries = new Map<string, CardTransaction>();
   for (const tx of transactions.filter(isInstallment)) {
     const key = [
@@ -170,20 +177,43 @@ function projectInstallments(
   }
 
   return [...latestBySeries.values()].flatMap((tx) => {
-    const offset = differenceInCalendarMonths(
-      parseMonth(monthRef),
-      parseMonth(tx.monthRef),
-    );
-    const current = (tx.installmentCurrent ?? 1) + offset;
-    if (offset <= 0 || current > (tx.installmentTotal ?? 0)) return [];
-    return [
-      {
-        ...toPurchase(tx, true),
-        id: `${tx.id}-forecast-${monthRef}`,
-        installmentCurrent: current,
-      },
-    ];
+    const latest = tx.installmentCurrent ?? 1;
+    const total = tx.installmentTotal ?? 0;
+    return Array.from({ length: Math.max(0, total - latest) }, (_, i) => {
+      const current = latest + 1 + i;
+      return {
+        tx,
+        current,
+        monthRef: format(
+          addMonths(parseMonth(tx.monthRef), current - latest),
+          "yyyy-MM",
+        ),
+        postsOn: tx.purchaseDate
+          ? format(
+              addMonths(parseISO(tx.purchaseDate), current - 1),
+              "yyyy-MM-dd",
+            )
+          : null,
+      };
+    });
   });
+}
+
+const toProjectedPurchase = (item: PendingInstallment): CardPurchaseView => ({
+  ...toPurchase(item.tx, true),
+  id: `${item.tx.id}-forecast-${item.monthRef}`,
+  installmentCurrent: item.current,
+});
+
+// Each installment series is projected from its most advanced synced row, so
+// a series not yet posted to the open bill still shows up in later months
+function projectInstallments(
+  transactions: CardTransaction[],
+  monthRef: string,
+): CardPurchaseView[] {
+  return remainingInstallments(transactions)
+    .filter((item) => item.monthRef === monthRef)
+    .map(toProjectedPurchase);
 }
 
 const dayOfMonth = (tx: CardTransaction) =>
@@ -300,6 +330,72 @@ function advancePayment(bills: CardBill[], monthRef: string): number {
   return excess > MONEY_TOLERANCE ? roundCents(excess) : 0;
 }
 
+interface OpenBillFromBalanceInput {
+  card: Card;
+  bills: CardBill[];
+  transactions: CardTransaction[];
+  installments: PendingInstallment[];
+  openMonth: string;
+  today: string;
+}
+
+// The card balance is all the credit in use: what is left of last month's
+// bill, the open bill and installments still to post. Pluggy does not itemize
+// every charge of the open bill (Nubank renegotiations, Bradesco installments
+// and its latest purchases), so the balance gives the bill the bank shows.
+// Only trusted once last month's bill is in, and when it adds up.
+function openBillFromBalance({
+  card,
+  bills,
+  transactions,
+  installments,
+  openMonth,
+  today,
+}: OpenBillFromBalanceInput): number | null {
+  if (card.balance === null) return null;
+  const lastBill = bills
+    .filter((b) => b.monthRef === previousMonth(openMonth))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  if (!lastBill) return null;
+
+  const listedLater = transactions
+    .filter((tx) => tx.monthRef > openMonth)
+    .reduce((total, tx) => total + Number(tx.amount), 0);
+  const toPost = installments
+    .filter(
+      (item) =>
+        item.monthRef > openMonth ||
+        (item.monthRef === openMonth && !!item.postsOn && item.postsOn > today),
+    )
+    .reduce((total, item) => total + Number(item.tx.amount), 0);
+  // Negative when last month was overpaid: the excess went to this bill
+  const lastBillLeft =
+    Number(lastBill.totalAmount) - Number(lastBill.paidAmount);
+
+  const amount = roundCents(
+    Number(card.balance) - listedLater - toPost - lastBillLeft,
+  );
+  return amount >= 0 ? amount : null;
+}
+
+function unlistedCharges(
+  card: Card,
+  monthRef: string,
+  amount: number,
+): CardPurchaseView {
+  return {
+    id: `${card.id}-${monthRef}-unlisted`,
+    description:
+      amount > 0
+        ? "Lançamentos ainda sem detalhe no banco"
+        : "Ajuste pelo saldo do cartão",
+    date: null,
+    amount,
+    category: FALLBACK_CATEGORY,
+    isForecast: false,
+  };
+}
+
 export function buildCardBillView({
   card,
   bills,
@@ -376,7 +472,40 @@ export function buildCardBillView({
 
   if (!isForecastMonth) {
     if (monthPurchases.length === 0 && monthRef !== openMonth) return empty;
-    const amount = sum(monthPurchases);
+    let purchases = monthPurchases;
+    let amount = sum(monthPurchases);
+
+    if (monthRef === openMonth) {
+      const todayDate = format(today, "yyyy-MM-dd");
+      const installments = remainingInstallments(cardTransactions);
+      // Installments that should have posted by now but Pluggy did not list
+      const posted = installments
+        .filter(
+          (item) =>
+            item.monthRef === monthRef &&
+            (!item.postsOn || item.postsOn <= todayDate),
+        )
+        .map(toProjectedPurchase);
+      purchases = [...monthPurchases, ...posted];
+      amount = sum(purchases);
+
+      const fromBalance = openBillFromBalance({
+        card,
+        bills: cardBills,
+        transactions: cardTransactions,
+        installments,
+        openMonth,
+        today: todayDate,
+      });
+      if (fromBalance !== null) {
+        const rest = roundCents(fromBalance - amount);
+        if (Math.abs(rest) > MONEY_TOLERANCE) {
+          purchases = [...purchases, unlistedCharges(card, monthRef, rest)];
+        }
+        amount = fromBalance;
+      }
+    }
+
     const dueDate = dueDateFor(monthRef, card.dueDay);
     const paidAmount = manualPaid + advancePayment(cardBills, monthRef);
 
@@ -402,8 +531,8 @@ export function buildCardBillView({
       amount,
       dueDate,
       paidAmount,
-      purchases: monthPurchases,
-      categories: summarizeCategories(monthPurchases),
+      purchases,
+      categories: summarizeCategories(purchases),
     };
   }
 
