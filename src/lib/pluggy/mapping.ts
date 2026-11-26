@@ -62,9 +62,42 @@ export interface MappedBill {
   hasPaymentInfo: boolean;
 }
 
-export function mapBill(bill: PluggyBill): MappedBill {
+// Each payment goes to the latest bill closed on or before its date. Pluggy
+// lists one payment under the bill it paid and, at Bradesco, again under the
+// next bill with a new id, so repeats (same date and amount) count once.
+export function allocateBillPayments(bills: PluggyBill[]): Map<string, number> {
+  const closed = bills
+    .filter((bill) => bill.billClosingDate)
+    .map((bill) => ({
+      id: bill.id,
+      closing: toDate(bill.billClosingDate ?? ""),
+    }))
+    .sort((a, b) => b.closing.localeCompare(a.closing));
+  const paid = new Map<string, number>();
+  const seen = new Set<string>();
+
+  for (const bill of bills) {
+    for (const payment of bill.payments ?? []) {
+      const date = payment.paymentDate ? toDate(payment.paymentDate) : null;
+      if (date) {
+        const key = `${date}|${payment.amount.toFixed(2)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+      }
+      const target =
+        (date && closed.find((c) => c.closing <= date)?.id) || bill.id;
+      paid.set(target, (paid.get(target) ?? 0) + payment.amount);
+    }
+  }
+  return paid;
+}
+
+// `allocatedPaid` comes from allocateBillPayments; without it the bill's own
+// list is summed
+export function mapBill(bill: PluggyBill, allocatedPaid?: number): MappedBill {
   const payments = bill.payments ?? [];
-  const paid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+  const paid =
+    allocatedPaid ?? payments.reduce((sum, payment) => sum + payment.amount, 0);
   return {
     externalId: bill.id,
     monthRef: toMonth(bill.dueDate),
@@ -72,7 +105,7 @@ export function mapBill(bill: PluggyBill): MappedBill {
     closingDate: bill.billClosingDate ? toDate(bill.billClosingDate) : null,
     totalAmount: String(bill.totalAmount),
     paidAmount: String(paid),
-    hasPaymentInfo: payments.length > 0,
+    hasPaymentInfo: payments.length > 0 || paid !== 0,
   };
 }
 

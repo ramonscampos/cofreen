@@ -22,7 +22,9 @@ export interface PluggyBill {
   dueDate: string;
   billClosingDate?: string | null;
   totalAmount: number;
-  payments?: { amount: number }[] | null;
+  payments?:
+    | { id?: string | null; amount: number; paymentDate?: string | null }[]
+    | null;
 }
 
 export interface PluggyTransaction {

@@ -285,13 +285,19 @@ function projectNamedSubscriptions(
     });
 }
 
+const previousMonth = (monthRef: string) =>
+  format(addMonths(parseMonth(monthRef), -1), "yyyy-MM");
+
+const roundCents = (value: number) => Math.round(value * 100) / 100;
+
 // Pluggy attaches a payment to the latest bill it knows, so a payment beyond
-// that bill's total is the early payment of the bill after it
+// that bill's total is the early payment of the bill after it. Totals carry
+// rounding noise (-0.0046), which is no payment.
 function advancePayment(bills: CardBill[], monthRef: string): number {
-  const previous = format(addMonths(parseMonth(monthRef), -1), "yyyy-MM");
-  const bill = bills.find((b) => b.monthRef === previous);
+  const bill = bills.find((b) => b.monthRef === previousMonth(monthRef));
   if (!bill) return 0;
-  return Math.max(0, Number(bill.paidAmount) - Number(bill.totalAmount));
+  const excess = Number(bill.paidAmount) - Number(bill.totalAmount);
+  return excess > MONEY_TOLERANCE ? roundCents(excess) : 0;
 }
 
 export function buildCardBillView({
@@ -386,7 +392,7 @@ export function buildCardBillView({
         ? "paid_inferred"
         : "closed";
     const status =
-      amount > MONEY_TOLERANCE && paidAmount > 0
+      amount > MONEY_TOLERANCE && paidAmount > MONEY_TOLERANCE
         ? (paymentStatus(amount, paidAmount) ?? baseStatus)
         : baseStatus;
 
