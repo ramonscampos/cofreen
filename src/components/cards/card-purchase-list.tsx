@@ -43,10 +43,11 @@ export function CardPurchaseList({
                   : "opacity-30"),
             )}
           >
-            <span className="col-start-1 row-start-1 flex items-center gap-2 overflow-hidden md:col-start-auto md:row-start-auto">
+            {/* The description wraps whole; installment and tag drop below it when short on room */}
+            <span className="col-start-1 row-start-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 md:col-start-auto md:row-start-auto">
               <span
                 className={cn(
-                  "truncate",
+                  "min-w-0 break-words",
                   purchase.isForecast ? "text-zinc-400" : "text-zinc-200",
                 )}
               >
@@ -66,7 +67,8 @@ export function CardPurchaseList({
             <span className="col-start-1 row-start-2 text-xs text-zinc-500 md:col-start-auto md:row-start-auto md:text-sm">
               {formatDay(purchase.date)}
             </span>
-            <span className="col-start-2 row-start-2 truncate text-right text-xs text-zinc-400 md:col-start-auto md:row-start-auto md:text-left md:text-sm">
+            {/* On mobile it spans the second row past the date, so a long category never narrows the description */}
+            <span className="col-span-2 col-start-1 row-start-2 truncate pl-12 text-right text-xs text-zinc-400 md:col-span-1 md:col-start-auto md:row-start-auto md:pl-0 md:text-left md:text-sm">
               {purchase.category}
             </span>
             <span
